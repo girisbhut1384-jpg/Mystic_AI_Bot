@@ -2,6 +2,8 @@ import os
 import sys
 import requests
 import urllib.parse
+import time
+import random
 from openai import OpenAI
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -64,10 +66,9 @@ def get_mystery_script():
         print(f"❌ OpenAI एरर: {e}")
         sys.exit(1)
 
-# --- 3. ElevenLabs से सस्पेंस वाली आवाज़ (एरर-फ्री Voice ID के साथ) ---
+# --- 3. ElevenLabs से सस्पेंस वाली आवाज़ (Rachel Voice) ---
 def generate_audio(script):
     print("🎙️ ElevenLabs से प्रीमियम सस्पेंस आवाज़ बन रही है...")
-    # बॉस, यहाँ मैंने Rachel की पक्की ID डाली है जो 100% काम करेगी और फेल नहीं होगी
     voice_id = "21m00Tcm4TlvDq8ikWAM" 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {"xi-api-key": ELEVEN_KEY, "Content-Type": "application/json"}
@@ -84,36 +85,57 @@ def generate_audio(script):
     print("✅ ऑडियो फाइल बन गई!")
     return audio_path
 
-# --- 4. AI इमेजेस बनाना और उन्हें 9:16 में सेट करना ---
+# --- 4. AI इमेजेस बनाना (Robust Retry System के साथ) ---
 def generate_and_format_images(prompts):
     print("🎨 AI से डार्क इमेजेस जनरेट हो रही हैं...")
     image_files = []
     style = ", cinematic lighting, 8k, photorealistic, dark mystery vibe, no text"
+    headers = {"User-Agent": "Mozilla/5.0"}
     
     for i, p in enumerate(prompts):
-        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(p + style)}?width=1080&height=1920&nologo=true"
         fname = f"scene_{i}.jpg"
-        res = requests.get(url)
-        with open(fname, "wb") as f:
-            f.write(res.content)
+        success = False
         
-        # इमेज को यूट्यूब शॉर्ट्स के साइज (1080x1920) में परफेक्ट काटना
-        img = Image.open(fname).convert("RGB")
-        target_ratio = 1080 / 1920
-        img_ratio = img.width / img.height
-        if img_ratio > target_ratio:
-            new_width = int(img.height * target_ratio)
-            left = (img.width - new_width) / 2
-            img = img.crop((left, 0, left + new_width, img.height))
-        else:
-            new_height = int(img.width / target_ratio)
-            top = (img.height - new_height) / 2
-            img = img.crop((0, top, img.width, top + new_height))
+        # 3 बार कोशिश करने वाला लूप (ताकि खराब फाइल आए तो क्रैश न हो)
+        for attempt in range(3):
+            try:
+                seed = random.randint(1000, 99999) # हर बार नई तस्वीर के लिए
+                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(p + style)}?width=1080&height=1920&nologo=true&seed={seed}"
+                
+                print(f"तस्वीर {i+1} डाउनलोड हो रही है (कोशिश {attempt+1})...")
+                res = requests.get(url, headers=headers, timeout=30)
+                
+                # चेक करें कि फाइल सही से आई है और खाली नहीं है
+                if res.status_code == 200 and len(res.content) > 1000:
+                    with open(fname, "wb") as f:
+                        f.write(res.content)
+                    
+                    # इमेज को यूट्यूब शॉर्ट्स के साइज में काटना
+                    img = Image.open(fname).convert("RGB")
+                    target_ratio = 1080 / 1920
+                    img_ratio = img.width / img.height
+                    if img_ratio > target_ratio:
+                        new_width = int(img.height * target_ratio)
+                        left = (img.width - new_width) / 2
+                        img = img.crop((left, 0, left + new_width, img.height))
+                    else:
+                        new_height = int(img.width / target_ratio)
+                        top = (img.height - new_height) / 2
+                        img = img.crop((0, top, img.width, top + new_height))
+                        
+                    img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+                    img.save(fname)
+                    image_files.append(fname)
+                    success = True
+                    break # सफलता मिली तो लूप से बाहर आ जाएं
+            except Exception as e:
+                print(f"⚠️ तस्वीर {i+1} में एरर: {e}, फिर से कोशिश कर रहे हैं...")
+                time.sleep(3)
+                
+        if not success:
+            print(f"❌ एरर: तस्वीर {i+1} 3 बार में भी नहीं बन पाई।")
+            sys.exit(1)
             
-        img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
-        img.save(fname)
-        image_files.append(fname)
-    
     print("✅ इमेजेस तैयार हो गईं!")
     return image_files
 
@@ -121,13 +143,11 @@ def generate_and_format_images(prompts):
 def create_video(audio_path, image_files):
     print("🎬 वीडियो रेंडर हो रहा है (मोशन इफ़ेक्ट के साथ)...")
     audio = AudioFileClip(audio_path)
-    # हर फोटो को ऑडियो की लंबाई के हिसाब से बराबर समय देना
     img_duration = audio.duration / len(image_files) 
     
     clips = []
     for img in image_files:
         clip = ImageClip(img).set_duration(img_duration)
-        # 1080x1920 पर फिक्स करके हल्का ज़ूम इफ़ेक्ट देना
         clip = clip.resize(lambda t: 1 + 0.05 * t).set_position(('center', 'center'))
         clips.append(clip)
         
@@ -136,6 +156,9 @@ def create_video(audio_path, image_files):
     
     output_file = "final_mystery_short.mp4"
     final_video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
+    
+    audio.close()
+    final_video.close()
     print("✅ असली MP4 वीडियो 100% रेडी है!")
     return output_file
 
