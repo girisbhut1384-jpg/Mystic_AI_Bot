@@ -1,7 +1,6 @@
 import os
 import sys
 import requests
-import urllib.parse
 import time
 import random
 from openai import OpenAI
@@ -24,24 +23,25 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
+LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY") # आपका पेड लियोनार्डो की
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY]):
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY]):
     print("❌ एरर: कोई ज़रूरी API Key या Token गायब है! GitHub Secrets चेक करें।")
     sys.exit(1)
 
 client = OpenAI(api_key=OPENAI_KEY)
 
-# --- 2. OpenAI से डार्क मिस्ट्री स्क्रिप्ट और 4 इमेजेस की मांग ---
+# --- 2. OpenAI से डार्क मिस्ट्री स्क्रिप्ट और प्रॉम्प्ट्स लेना ---
 def get_mystery_script():
     print("🧠 OpenAI से रहस्यमयी स्क्रिप्ट सोची जा रही है...")
     prompt = """
     Write a 40-second YouTube Short script about a terrifying, unsolved mystery or dark space anomaly in Hindi.
     Format EXACTLY like this (No extra text):
     TITLE: [Catchy Viral English Title]
-    PROMPT1: [Dark creepy highly detailed image prompt 1]
-    PROMPT2: [Dark creepy highly detailed image prompt 2]
-    PROMPT3: [Dark creepy highly detailed image prompt 3]
-    PROMPT4: [Dark creepy highly detailed image prompt 4]
+    PROMPT1: [Dark creepy highly detailed master cinematic image prompt 1]
+    PROMPT2: [Dark creepy highly detailed master cinematic image prompt 2]
+    PROMPT3: [Dark creepy highly detailed master cinematic image prompt 3]
+    PROMPT4: [Dark creepy highly detailed master cinematic image prompt 4]
     SCRIPT: [Hindi voiceover script. Must have a strong 3-second hook. End with asking to subscribe]
     """
     try:
@@ -85,58 +85,83 @@ def generate_audio(script):
     print("✅ ऑडियो फाइल बन गई!")
     return audio_path
 
-# --- 4. AI इमेजेस बनाना (Robust Retry System के साथ) ---
-def generate_and_format_images(prompts):
-    print("🎨 AI से डार्क इमेजेस जनरेट हो रही हैं...")
+# --- 4. 👑 Leonardo AI से प्रीमियम 9:16 इमेजेस जनरेट करना ---
+def generate_leonardo_images(prompts):
+    print("🎨 Leonardo AI (Paid) से अल्ट्रा-एचडी तस्वीरें जनरेट हो रही हैं...")
     image_files = []
-    style = ", cinematic lighting, 8k, photorealistic, dark mystery vibe, no text"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    # लियोनार्डो का डिफ़ॉल्ट हाई-क्वालिटी मॉडल ID (Leonardo Vision XL)
+    model_id = "5c232e9a-9061-4be1-90ca-94d856b152e8" 
+    
+    url_gen = "https://api.leonardo.ai/v1/generations"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "authorization": f"Bearer {LEONARDO_KEY}"
+    }
     
     for i, p in enumerate(prompts):
         fname = f"scene_{i}.jpg"
-        success = False
+        print(f"🎬 तस्वीर {i+1} का ऑर्डर लियोनार्डो को दिया जा रहा है...")
         
-        # 3 बार कोशिश करने वाला लूप (ताकि खराब फाइल आए तो क्रैश न हो)
-        for attempt in range(3):
-            try:
-                seed = random.randint(1000, 99999) # हर बार नई तस्वीर के लिए
-                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(p + style)}?width=1080&height=1920&nologo=true&seed={seed}"
+        payload = {
+            "height": 1920,
+            "width": 1080, # परफेक्ट 9:16 रेशियो शॉर्ट्स के लिए
+            "modelId": model_id,
+            "prompt": p + ", dark mystical atmosphere, hyper-detailed, 8k resolution, cinematic lighting",
+            "num_images": 1
+        }
+        
+        try:
+            # 1. इमेज जनरेशन शुरू करने का अनुरोध
+            res = requests.post(url_gen, json=payload, headers=headers)
+            if res.status_code != 200:
+                print(f"⚠️ लियोनार्डो ऑर्डर एरर: {res.text}")
+                raise Exception("Leonardo API Refused")
                 
-                print(f"तस्वीर {i+1} डाउनलोड हो रही है (कोशिश {attempt+1})...")
-                res = requests.get(url, headers=headers, timeout=30)
-                
-                # चेक करें कि फाइल सही से आई है और खाली नहीं है
-                if res.status_code == 200 and len(res.content) > 1000:
-                    with open(fname, "wb") as f:
-                        f.write(res.content)
-                    
-                    # इमेज को यूट्यूब शॉर्ट्स के साइज में काटना
-                    img = Image.open(fname).convert("RGB")
-                    target_ratio = 1080 / 1920
-                    img_ratio = img.width / img.height
-                    if img_ratio > target_ratio:
-                        new_width = int(img.height * target_ratio)
-                        left = (img.width - new_width) / 2
-                        img = img.crop((left, 0, left + new_width, img.height))
-                    else:
-                        new_height = int(img.width / target_ratio)
-                        top = (img.height - new_height) / 2
-                        img = img.crop((0, top, img.width, top + new_height))
-                        
-                    img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
-                    img.save(fname)
-                    image_files.append(fname)
-                    success = True
-                    break # सफलता मिली तो लूप से बाहर आ जाएं
-            except Exception as e:
-                print(f"⚠️ तस्वीर {i+1} में एरर: {e}, फिर से कोशिश कर रहे हैं...")
-                time.sleep(3)
-                
-        if not success:
-            print(f"❌ एरर: तस्वीर {i+1} 3 बार में भी नहीं बन पाई।")
-            sys.exit(1)
+            generation_id = res.json()["sdGenerationJob"]["generationId"]
             
-    print("✅ इमेजेस तैयार हो गईं!")
+            # 2. 👑 पोल्लिंग लूप (Polling Loop) - जब तक फोटो बन न जाए, इंतज़ार करो
+            url_check = f"https://api.leonardo.ai/v1/generations/{generation_id}"
+            photo_url = None
+            
+            for check_attempt in range(15): # अधिकतम 150 सेकंड इंतज़ार करेगा
+                time.sleep(10)
+                print(f"⏳ तस्वीर {i+1} के बनने का इंतज़ार हो रहा है ({check_attempt*10}s)...")
+                check_res = requests.get(url_check, headers=headers)
+                
+                if check_res.status_code == 200:
+                    gen_data = check_res.json()["generations_by_pk"]
+                    if gen_data["status"] == "COMPLETE":
+                        photo_url = gen_data["generated_images"][0]["url"]
+                        break
+                    elif gen_data["status"] == "FAILED":
+                        print("❌ लियोनार्डो सर्वर पर फोटो फेल हो गई।")
+                        break
+            
+            # 3. फोटो डाउनलोड करना
+            if photo_url:
+                img_data = requests.get(photo_url).content
+                with open(fname, "wb") as f:
+                    f.write(img_data)
+                
+                # साइज को दोबारा री-चेक करना सेफ्टी के लिए
+                img = Image.open(fname).convert("RGB")
+                img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+                img.save(fname)
+                
+                image_files.append(fname)
+                print(f"✅ तस्वीर {i+1} सफलतापूर्वक डाउनलोड हो गई!")
+            else:
+                raise Exception("Timeout or Failed status")
+                
+        except Exception as e:
+            print(f"⚠️ लियोनार्डो में दिक्कत आई: {e}। सेफ्टी के लिए डार्क बैकग्राउंड इस्तेमाल कर रहे हैं...")
+            # सेफ्टी बैकग्राउंड ताकि महंगे क्रेडिट्स बेकार न जाएं
+            fallback_img = Image.new('RGB', (1080, 1920), color=(10, 10, 25))
+            fallback_img.save(fname)
+            image_files.append(fname)
+            
     return image_files
 
 # --- 5. वीडियो एडिटिंग (मोशन और ज़ूम के साथ) ---
@@ -189,7 +214,7 @@ if __name__ == "__main__":
     print("🚀 Mystery AI Engine स्टार्ट हो रहा है...")
     title, script, prompts = get_mystery_script()
     audio_path = generate_audio(script)
-    images = generate_and_format_images(prompts)
+    images = generate_leonardo_images(prompts) # यहाँ सीधे आपका पेड लियोनार्डो काम करेगा
     final_video = create_video(audio_path, images)
     
     description = f"{title}\n\nदुनिया और अंतरिक्ष के सबसे खूंखार रहस्य! 🌌✨ #shorts #mystery #viral #creepy\n\n📝 Script:\n{script}"
