@@ -23,7 +23,7 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
-LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY") # आपका पेड लियोनार्डो की
+LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
 
 if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY]):
     print("❌ एरर: कोई ज़रूरी API Key या Token गायब है! GitHub Secrets चेक करें।")
@@ -85,15 +85,13 @@ def generate_audio(script):
     print("✅ ऑडियो फाइल बन गई!")
     return audio_path
 
-# --- 4. 👑 Leonardo AI से प्रीमियम 9:16 इमेजेस जनरेट करना ---
+# --- 4. 👑 Leonardo AI से प्रीमियम इमेजेस जनरेट करना (Corrected API URL) ---
 def generate_leonardo_images(prompts):
     print("🎨 Leonardo AI (Paid) से अल्ट्रा-एचडी तस्वीरें जनरेट हो रही हैं...")
     image_files = []
     
-    # लियोनार्डो का डिफ़ॉल्ट हाई-क्वालिटी मॉडल ID (Leonardo Vision XL)
-    model_id = "5c232e9a-9061-4be1-90ca-94d856b152e8" 
-    
-    url_gen = "https://api.leonardo.ai/v1/generations"
+    # बिल्कुल सही और नया Leonardo API एड्रेस
+    url_gen = "https://cloud.leonardo.ai/api/rest/v1/generations"
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -105,15 +103,13 @@ def generate_leonardo_images(prompts):
         print(f"🎬 तस्वीर {i+1} का ऑर्डर लियोनार्डो को दिया जा रहा है...")
         
         payload = {
-            "height": 1920,
-            "width": 1080, # परफेक्ट 9:16 रेशियो शॉर्ट्स के लिए
-            "modelId": model_id,
+            "height": 1024, # लियोनार्डो का स्टैण्डर्ड वर्टीकल साइज़ (Fail-safe)
+            "width": 576, 
             "prompt": p + ", dark mystical atmosphere, hyper-detailed, 8k resolution, cinematic lighting",
             "num_images": 1
         }
         
         try:
-            # 1. इमेज जनरेशन शुरू करने का अनुरोध
             res = requests.post(url_gen, json=payload, headers=headers)
             if res.status_code != 200:
                 print(f"⚠️ लियोनार्डो ऑर्डर एरर: {res.text}")
@@ -121,11 +117,11 @@ def generate_leonardo_images(prompts):
                 
             generation_id = res.json()["sdGenerationJob"]["generationId"]
             
-            # 2. 👑 पोल्लिंग लूप (Polling Loop) - जब तक फोटो बन न जाए, इंतज़ार करो
-            url_check = f"https://api.leonardo.ai/v1/generations/{generation_id}"
+            # पोलिंग लूप (इंतज़ार करना)
+            url_check = f"https://cloud.leonardo.ai/api/rest/v1/generations/{generation_id}"
             photo_url = None
             
-            for check_attempt in range(15): # अधिकतम 150 सेकंड इंतज़ार करेगा
+            for check_attempt in range(15):
                 time.sleep(10)
                 print(f"⏳ तस्वीर {i+1} के बनने का इंतज़ार हो रहा है ({check_attempt*10}s)...")
                 check_res = requests.get(url_check, headers=headers)
@@ -139,13 +135,12 @@ def generate_leonardo_images(prompts):
                         print("❌ लियोनार्डो सर्वर पर फोटो फेल हो गई।")
                         break
             
-            # 3. फोटो डाउनलोड करना
             if photo_url:
                 img_data = requests.get(photo_url).content
                 with open(fname, "wb") as f:
                     f.write(img_data)
                 
-                # साइज को दोबारा री-चेक करना सेफ्टी के लिए
+                # इसे परफेक्ट यूट्यूब शॉर्ट्स (1080x1920) साइज में बड़ा (Upscale) करना
                 img = Image.open(fname).convert("RGB")
                 img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
                 img.save(fname)
@@ -157,7 +152,6 @@ def generate_leonardo_images(prompts):
                 
         except Exception as e:
             print(f"⚠️ लियोनार्डो में दिक्कत आई: {e}। सेफ्टी के लिए डार्क बैकग्राउंड इस्तेमाल कर रहे हैं...")
-            # सेफ्टी बैकग्राउंड ताकि महंगे क्रेडिट्स बेकार न जाएं
             fallback_img = Image.new('RGB', (1080, 1920), color=(10, 10, 25))
             fallback_img.save(fname)
             image_files.append(fname)
@@ -214,7 +208,7 @@ if __name__ == "__main__":
     print("🚀 Mystery AI Engine स्टार्ट हो रहा है...")
     title, script, prompts = get_mystery_script()
     audio_path = generate_audio(script)
-    images = generate_leonardo_images(prompts) # यहाँ सीधे आपका पेड लियोनार्डो काम करेगा
+    images = generate_leonardo_images(prompts)
     final_video = create_video(audio_path, images)
     
     description = f"{title}\n\nदुनिया और अंतरिक्ष के सबसे खूंखार रहस्य! 🌌✨ #shorts #mystery #viral #creepy\n\n📝 Script:\n{script}"
