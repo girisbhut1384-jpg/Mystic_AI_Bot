@@ -1,7 +1,9 @@
 name: Mystic Bot Auto Video Creator
 
 on:
-  workflow_dispatch: # यह सुनिश्चित करेगा कि कोड केवल आपके बटन दबाने पर चले (क्रेडिट बचाने के लिए)
+  workflow_dispatch: # मैन्युअल बटन (आप जब चाहें तब दबा सकते हैं)
+  schedule:
+    - cron: '30 12 * * *' # यह हर दिन UTC 12:30 PM (भारत में शाम 6:00 बजे) अपने आप चलेगा
 
 jobs:
   build-and-upload:
@@ -15,6 +17,9 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Dependencies
         run: |
