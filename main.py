@@ -5,7 +5,7 @@ import time
 import random
 import textwrap
 import json
-import urllib.request # फॉन्ट डाउनलोड करने के लिए नया इम्पोर्ट
+import urllib.request
 from openai import OpenAI
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -18,7 +18,7 @@ if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
-from moviepy.video.fx.all import time_mirror # काली स्क्रीन रोकने के लिए (सुरक्षित है)
+from moviepy.video.fx.all import time_mirror 
 
 # --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -131,7 +131,7 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Strict Paid Mode) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Strict Paid Mode + Smart Downloader Fix) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
@@ -197,10 +197,23 @@ def generate_premium_videos(prompts):
                         raise Exception("Runway Task Failed Internally")
             
             if final_video_url:
-                with open(vname, "wb") as f:
-                    f.write(requests.get(final_video_url).content)
-                video_clips.append(vname)
-                print(f"✅ Runway मोशन वीडियो {i+1} सफल!")
+                # ✅ फिक्स: स्मार्ट चंक डाउनलोडर (Smart Chunk Downloader)
+                print(f"📥 वीडियो डाउनलोड किया जा रहा है...")
+                vid_res = requests.get(final_video_url, stream=True)
+                if vid_res.status_code == 200:
+                    with open(vname, "wb") as f:
+                        for chunk in vid_res.iter_content(chunk_size=1024*1024): # 1MB चंक्स
+                            if chunk:
+                                f.write(chunk)
+                    
+                    # ✅ फिक्स: फाइल करप्शन वेरिफिकेशन
+                    if os.path.getsize(vname) < 10000: # अगर फाइल 10KB से छोटी है, तो वह करप्ट है
+                        raise Exception("Runway से करप्ट (0 Byte) फाइल डाउनलोड हुई है।")
+                        
+                    video_clips.append(vname)
+                    print(f"✅ Runway मोशन वीडियो {i+1} सफलता से डाउनलोड और सुरक्षित हो गया!")
+                else:
+                    raise Exception(f"Runway वीडियो डाउनलोड फेल (Status: {vid_res.status_code})")
             else:
                 raise Exception("Runway Timeout - वीडियो समय पर नहीं बना")
                 
@@ -211,24 +224,21 @@ def generate_premium_videos(prompts):
             
     return video_clips
 
-# --- 6. डायनामिक बोल्ड कैप्शंस (सिर्फ यही हिस्सा अपग्रेड किया गया है) ---
+# --- 6. डायनामिक बोल्ड कैप्शंस ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # फॉन्ट फाइल को सर्वर पर डाउनलोड करना ताकि डिफ़ॉल्ट छोटा फॉन्ट न आए
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
         try:
-            print("📥 बड़ा और शानदार फॉन्ट डाउनलोड हो रहा है...")
             url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Black.ttf"
             urllib.request.urlretrieve(url, font_path)
         except Exception as e:
             print(f"⚠️ फॉन्ट डाउनलोड एरर: {e}")
     
     try:
-        # साइज़ 115 से बढ़ाकर 140 कर दिया गया है
         font = ImageFont.truetype(font_path, 140)
     except:
         font = ImageFont.load_default()
@@ -238,14 +248,13 @@ def create_bold_yellow_caption(text, duration):
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
     x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
-    # चमकीला पीला रंग (#FFE81F) और मोटी काली आउटलाइन
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग इंजन (Boomerang Fix के साथ सुरक्षित) ---
+# --- 7. हाई-रिटेंशन रेंडरिंग इंजन ---
 def compile_high_retention_video(video_files, captions, audio_path):
     print("🎞️ वीडियो रेंडर किया जा रहा है (काली स्क्रीन फिक्स के साथ)...")
     audio = AudioFileClip(audio_path)
@@ -257,7 +266,6 @@ def compile_high_retention_video(video_files, captions, audio_path):
     for idx, vfile in enumerate(video_files):
         clip = VideoFileClip(vfile)
         
-        # 🎬 मास्टरस्ट्रोक: बूमरैंग इफ़ेक्ट
         clip_reversed = clip.fx(time_mirror)
         clip = concatenate_videoclips([clip, clip_reversed])
         
@@ -267,7 +275,6 @@ def compile_high_retention_video(video_files, captions, audio_path):
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_bold_yellow_caption(cap_text, clip.duration)
-            # कैप्शंस को स्क्रीन के सेंटर से थोड़ा नीचे (0.75) सेट किया है ताकि विजुअल्स न छिपें
             txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
             combined = CompositeVideoClip([clip, txt_clip], size=(1080, 1920))
         else:
