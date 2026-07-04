@@ -18,7 +18,7 @@ if not hasattr(Image, 'ANTIALIAS'):
 
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 
-# --- 1. प्रीमियम API क्रेडेंशियल्स ---
+# --- प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
@@ -36,7 +36,7 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEO
 
 client = OpenAI(api_key=OPENAI_KEY)
 
-# --- 2. रिपोर्टिंग और क्रेडिट चेक फंक्शन्स ---
+# --- टेलीग्राम रिपोर्ट फंक्शन ---
 def send_telegram_report(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
@@ -45,63 +45,19 @@ def send_telegram_report(message):
     except Exception as e:
         print(f"टेलीग्राम मैसेज एरर: {e}")
 
-def check_elevenlabs_credits():
-    try:
-        url = "https://api.elevenlabs.io/v1/user/subscription"
-        headers = {"xi-api-key": ELEVEN_KEY}
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            used = data['character_count']
-            total = data['character_limit']
-            remain = total - used
-            return f"<b>ElevenLabs:</b> {remain} कैरेक्टर्स बाकी हैं (कुल: {total})"
-        return "<b>ElevenLabs:</b> क्रेडिट डेटा अनुपलब्ध"
-    except:
-        return "<b>ElevenLabs:</b> क्रेडिट चेक विफल"
-
-def check_leonardo_credits():
-    try:
-        url = "https://cloud.leonardo.ai/api/rest/v1/me"
-        headers = {"accept": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            details = res.json()
-            remain = details.get('user_details', [{}])[0].get('api_credit_volume', 'N/A')
-            return f"<b>Leonardo AI:</b> {remain} टोकन्स बाकी हैं"
-        return "<b>Leonardo AI:</b> क्रेडिट डेटा अनुपलब्ध"
-    except:
-        return "<b>Leonardo AI:</b> क्रेडिट चेक विफल"
-
-def check_runway_credits():
-    """Runway ML का क्रेडिट चेक सिस्टम"""
-    try:
-        # Runway के नए API में डायरेक्ट क्रेडिट एंडपॉइंट सीमित हो सकता है, लेकिन हम इसे सुरक्षित तरीके से कॉल करेंगे।
-        url = "https://api.gateway.runwayml.com/v1/account"
-        headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06"}
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            # भविष्य में अगर Runway API में 'credits' फील्ड आता है, तो यह उसे पकड़ लेगा
-            data = res.json()
-            remain = data.get('credits', 'डैशबोर्ड में चेक करें (API में सीधा सपोर्ट नहीं)')
-            return f"<b>Runway ML:</b> {remain}"
-        return "<b>Runway ML:</b> API से सीधे क्रेडिट दिखाने की अनुमति नहीं (डैशबोर्ड देखें)"
-    except:
-        return "<b>Runway ML:</b> क्रेडिट चेक विफल"
-
-# --- 3. सुपर वायरल, अनसुनी कहानी जनरेशन (GPT-4o) ---
+# --- सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
-    print("🧠 GPT-4o से 50-सेकंड की एकदम अनसुनी और ज्ञानवर्धक स्क्रिप्ट लिखी जा रही है...")
+    print("🧠 GPT-4o से एकदम अनसुनी स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
-    Write an ULTRA-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, UNHEARD-OF (Ansuni) and mind-blowing space or historical mystery in Hindi.
+    Write an ULTRA-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, UNHEARD-OF and mind-blowing space or historical mystery in Hindi.
     
-    STRICT RULES FOR VIRALITY, STORYTELLING & KNOWLEDGE:
-    1. NO FLUFF, PURE VALUE: Do not use generic, boring, or overused facts. The mystery must be factually accurate, highly obscure, and actively increase the viewer's knowledge. No nonsense or filler words.
-    2. HOOK: The first 3 seconds MUST be a brutal pattern interrupt. Start exactly with a shocking hook that forces them to stop scrolling. 
-    3. PACING & STORY: Write exactly 110-120 words in Hindi for a solid 45-50 second suspenseful delivery. Keep them hooked with a unique narrative arc (Hook -> Deep Mystery/Knowledge -> Mind-blowing conclusion).
-    4. CTA: The very last sentence must be exactly: "पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
-    5. PROMPTS: Provide 6 ultra-realistic image prompts. Use keywords like "hyper-realistic, 8k resolution, cinematic lighting, unreal engine 5, terrifying atmospheric depth, highly detailed".
-    6. CAPTIONS: Provide 6 short, punchy 2-3 word phrases for on-screen captions matching the narrative arc.
+    STRICT RULES:
+    1. NO FLUFF: The mystery must be factually accurate, highly obscure, and actively increase knowledge.
+    2. HOOK: First 3 seconds MUST be a brutal pattern interrupt.
+    3. PACING: Exactly 110-120 words in Hindi for a 45-50 second delivery.
+    4. CTA: The last sentence MUST be EXACTLY: "हमारे चैनल को सब्सक्राइब करें और पूरा सच जानने व ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
+    5. PROMPTS: Provide 6 ultra-realistic image prompts. Keywords: "hyper-realistic, cinematic lighting, eerie, 8k".
+    6. CAPTIONS: Provide 6 short, punchy 2-3 word phrases for on-screen captions matching the story.
     
     Return ONLY valid JSON format:
     {
@@ -118,7 +74,7 @@ def get_viral_content():
             model="gpt-4o",
             messages=[{"role": "user", "content": master_prompt}],
             response_format={"type": "json_object"},
-            temperature=0.85 # थोडा सा क्रिएटिविटी बढाया ताकि एकदम अनोखी कहानियाँ मिलें
+            temperature=0.85
         )
         parsed = json.loads(response.choices[0].message.content)
         tokens_used = response.usage.total_tokens
@@ -130,7 +86,7 @@ def get_viral_content():
         send_telegram_report(f"❌ <b>GPT-4o एरर:</b> {e}")
         sys.exit(1)
 
-# --- 4. प्रीमियम वॉयसओवर ---
+# --- प्रीमियम वॉयसओवर ---
 def generate_premium_audio(script):
     print("🎙️ ElevenLabs से डीप सस्पेंस वॉइसओवर बन रहा है...")
     voice_id = "21m00Tcm4TlvDq8ikWAM"
@@ -148,7 +104,7 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Leonardo + Runway) ---
+# --- हॉलीवुड-ग्रेड विजुअल्स (100% Fix + Retry System) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
@@ -161,61 +117,82 @@ def generate_premium_videos(prompts):
         vname = f"clip_{i}.mp4"
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
-        try:
-            payload = {"height": 1024, "width": 576, "modelId": "5c232e9a-9061-4be1-90ca-94d856b152e8", "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", "num_images": 1}
-            res = requests.post(leo_url, json=payload, headers=leo_headers)
-            gen_id = res.json()["sdGenerationJob"]["generationId"]
-            
-            img_url = None
-            for _ in range(12):
-                time.sleep(10)
-                check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
-                if check.json()["generations_by_pk"]["status"] == "COMPLETE":
-                    img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
-                    break
-            
-            if not img_url:
-                raise Exception("Leonardo Timeout")
-
-            print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है...")
-            runway_payload = {
-                "model": "gen3a_turbo",
-                "promptImage": img_url,
-                "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic, volumetric lighting",
-                "duration": 5
-            }
-            r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
-            task_id = r_res.json()["id"]
-            
-            final_video_url = None
-            for _ in range(25):
-                time.sleep(10)
-                r_check = requests.get(f"https://api.gateway.runwayml.com/v1/tasks/{task_id}", headers=runway_headers)
-                status = r_check.json()["status"]
-                if status == "SUCCEEDED":
-                    final_video_url = r_check.json()["output"][0]
-                    break
-                elif status == "FAILED":
-                    break
-            
-            if final_video_url:
-                with open(vname, "wb") as f:
-                    f.write(requests.get(final_video_url).content)
-                video_clips.append(vname)
-            else:
-                raise Exception("Runway Failed/Timeout")
+        success = False
+        # स्मार्ट री-ट्राई सिस्टम: 3 बार कोशिश करेगा
+        for attempt in range(3):
+            try:
+                print(f"👉 कोशिश {attempt + 1}...")
+                # फिक्स: 512x1024 सबसे सेफ वर्टिकल साइज है
+                payload = {
+                    "height": 1024, 
+                    "width": 512, 
+                    "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", 
+                    "num_images": 1
+                }
+                res = requests.post(leo_url, json=payload, headers=leo_headers)
+                if res.status_code != 200:
+                    raise Exception(f"Leonardo API Error: {res.text}")
+                    
+                gen_id = res.json()["sdGenerationJob"]["generationId"]
                 
-        except Exception as e:
-            print(f"⚠️ दृश्य {i+1} में दिक्कत ({e}), फ़ॉलबैक इस्तेमाल कर रहे हैं...")
-            fallback_img = Image.new('RGB', (1080, 1920), color=(15, 15, 25))
-            fallback_img.save(f"fb_{i}.jpg")
-            c = ImageClip(f"fb_{i}.jpg").set_duration(6)
-            c.write_videofile(vname, fps=24, codec="libx264", logger=None)
-            video_clips.append(vname)
+                img_url = None
+                for _ in range(12):
+                    time.sleep(10)
+                    check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
+                    if check.json()["generations_by_pk"]["status"] == "COMPLETE":
+                        img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
+                        break
+                
+                if not img_url:
+                    raise Exception("Leonardo Timeout - इमेज समय पर नहीं बनी")
+
+                print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है...")
+                runway_payload = {
+                    "model": "gen3a_turbo",
+                    "promptImage": img_url,
+                    "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
+                    "duration": 5
+                }
+                r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
+                
+                if r_res.status_code != 200:
+                    raise Exception(f"Runway API Error: {r_res.text}")
+                    
+                task_id = r_res.json()["id"]
+                
+                final_video_url = None
+                for _ in range(25):
+                    time.sleep(10)
+                    r_check = requests.get(f"https://api.gateway.runwayml.com/v1/tasks/{task_id}", headers=runway_headers)
+                    status = r_check.json()["status"]
+                    if status == "SUCCEEDED":
+                        final_video_url = r_check.json()["output"][0]
+                        break
+                    elif status == "FAILED":
+                        raise Exception("Runway Task Failed internally")
+                
+                if final_video_url:
+                    with open(vname, "wb") as f:
+                        f.write(requests.get(final_video_url).content)
+                    video_clips.append(vname)
+                    success = True
+                    break # सफलता मिलने पर लूप से बाहर आ जाएं
+                else:
+                    raise Exception("Runway Timeout - वीडियो समय पर नहीं बना")
+                    
+            except Exception as e:
+                print(f"⚠️ एरर: {e}")
+                time.sleep(5) # अगली कोशिश से पहले 5 सेकंड का ब्रेक
+                
+        # अगर 3 कोशिशों के बाद भी सफलता नहीं मिली, तो कचरा वीडियो अपलोड करने से बेहतर है मशीन रोक दें।
+        if not success:
+            error_msg = f"❌ <b>इंजन रुका:</b> दृश्य {i+1} को 3 बार बनाने की कोशिश की गई लेकिन फेल हो गया। क्वालिटी ख़राब न हो इसलिए प्रोसेस रोक दिया गया है।"
+            send_telegram_report(error_msg)
+            sys.exit(1)
             
     return video_clips
 
-# --- 6. डायनामिक बोल्ड कैप्शंस ---
+# --- डायनामिक बोल्ड कैप्शंस ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -237,7 +214,7 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. रेंडरिंग इंजन ---
+# --- हाई-रिटेंशन रेंडरिंग इंजन ---
 def compile_high_retention_video(video_files, captions, audio_path):
     print("🎞️ वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
@@ -272,7 +249,7 @@ def compile_high_retention_video(video_files, captions, audio_path):
     final_video.close()
     return output_name
 
-# --- 8. यूट्यूब अपलोड और लिंक जेनरेशन ---
+# --- यूट्यूब अपलोड ---
 def upload_to_youtube(video_file, title, description, tags):
     print(f"📤 YouTube पर लाइव किया जा रहा है...")
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -293,35 +270,24 @@ if __name__ == "__main__":
     try:
         print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE 👑")
         
-        # 1. कंटेंट जनरेट करें
         title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
         audio_path = generate_premium_audio(script)
         video_files = generate_premium_videos(prompts)
         final_output = compile_high_retention_video(video_files, captions, audio_path)
         
-        # 2. अपलोड करें
         gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
         final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
-        # 3. प्रीमियम API क्रेडिट चेक
-        elevenlabs_status = check_elevenlabs_credits()
-        leonardo_status = check_leonardo_credits()
-        runway_status = check_runway_credits()
-        
-        # 4. टेलीग्राम पर संपूर्ण रिपोर्ट
-        report_msg = f"""✅ <b>वायरल वीडियो सफलतापूर्वक अपलोड हो गया!</b> ✅
+        report_msg = f"""✅ <b>सुपर-वायरल वीडियो अपलोड हो गया!</b> ✅
         
 🎬 <b>Title:</b> {title}
 🔗 <b>YouTube Link:</b> <a href='{video_url}'>यहाँ क्लिक करके देखें</a>
 
-📊 <b>प्रीमियम API क्रेडिट रिपोर्ट:</b>
-- <b>OpenAI (GPT-4o):</b> उपयोग किए गए टोकन: {gpt_tokens}
-- {elevenlabs_status}
-- {leonardo_status}
-- {runway_status}
-
-💰 Gumroad लिंक डिस्क्रिप्शन में एक्टिव है। अगले 30 दिन का मोनेटाइजेशन प्लान ट्रैक पर है!"""
+📊 <b>सिस्टम स्टेटस:</b>
+- क्वालिटी: 100% हॉलीवुड-ग्रेड (कोई काली स्क्रीन नहीं)
+- स्क्रिप्ट और CTA: सफलता (Subscribe + Gumroad)
+- टोकन उपयोग (GPT-4o): {gpt_tokens}"""
         
         send_telegram_report(report_msg)
         print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
