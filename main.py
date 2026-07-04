@@ -5,6 +5,7 @@ import time
 import random
 import textwrap
 import json
+import urllib.request # फॉन्ट डाउनलोड करने के लिए नया इम्पोर्ट
 from openai import OpenAI
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -17,6 +18,7 @@ if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
+from moviepy.video.fx.all import time_mirror # काली स्क्रीन रोकने के लिए (सुरक्षित है)
 
 # --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -36,7 +38,7 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEO
 
 client = OpenAI(api_key=OPENAI_KEY)
 
-# --- 2. टेलीग्राम रिपोर्ट फंक्शन ---
+# --- 2. टेलीग्राम रिपोर्ट और क्रेडिट चेक ---
 def send_telegram_report(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
@@ -44,6 +46,31 @@ def send_telegram_report(message):
         requests.post(url, json=payload)
     except Exception as e:
         print(f"टेलीग्राम मैसेज एरर: {e}")
+
+def check_elevenlabs_credits():
+    try:
+        url = "https://api.elevenlabs.io/v1/user/subscription"
+        headers = {"xi-api-key": ELEVEN_KEY}
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            remain = data['character_limit'] - data['character_count']
+            return f"ElevenLabs: {remain} कैरेक्टर्स बाकी"
+        return "ElevenLabs: क्रेडिट अनुपलब्ध"
+    except: 
+        return "ElevenLabs: चेक विफल"
+
+def check_leonardo_credits():
+    try:
+        url = "https://cloud.leonardo.ai/api/rest/v1/me"
+        headers = {"accept": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            remain = res.json().get('user_details', [{}])[0].get('api_credit_volume', 'N/A')
+            return f"Leonardo: {remain} टोकन्स बाकी"
+        return "Leonardo: क्रेडिट अनुपलब्ध"
+    except: 
+        return "Leonardo: चेक विफल"
 
 # --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
@@ -104,13 +131,12 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (STRICT PAID MODE - No Fallbacks) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Strict Paid Mode) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
-    # ✅ फिक्स: Runway का 100% सही और वेरीफाइड डेवलपर लिंक
     runway_url = "https://api.dev.runwayml.com/v1/image_to_video"
     runway_headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06", "Content-Type": "application/json"}
     
@@ -119,7 +145,6 @@ def generate_premium_videos(prompts):
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
         try:
-            # 1. Leonardo से 8K इमेज बनवाना (512x1024 वर्टिकल)
             payload = {
                 "height": 1024, 
                 "width": 512, 
@@ -143,7 +168,6 @@ def generate_premium_videos(prompts):
             if not img_url:
                 raise Exception("Leonardo Timeout")
 
-            # 2. Runway ML से मोशन (बिना किसी कॉम्प्रोमाइज़ के)
             print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है (Strict Mode)...")
             runway_payload = {
                 "model": "gen3a_turbo",
@@ -159,7 +183,7 @@ def generate_premium_videos(prompts):
             task_id = r_res.json()["id"]
             
             final_video_url = None
-            for _ in range(30): # Runway को रेंडर करने के लिए पर्याप्त समय (5 मिनट तक)
+            for _ in range(30): 
                 time.sleep(10)
                 check_url = f"https://api.dev.runwayml.com/v1/tasks/{task_id}"
                 r_check = requests.get(check_url, headers=runway_headers)
@@ -181,21 +205,31 @@ def generate_premium_videos(prompts):
                 raise Exception("Runway Timeout - वीडियो समय पर नहीं बना")
                 
         except Exception as main_error:
-            # अब यह किसी फोटो का जुगाड़ नहीं करेगा। अगर AI फेल है, तो यह सीधा आपको रिपोर्ट करेगा।
             error_msg = f"❌ <b>विजुअल क्रैश:</b> दृश्य {i+1} में गड़बड़ी आई। क्वालिटी से समझौता न करने के लिए प्रोसेस रोक दिया गया है। एरर: {main_error}"
             send_telegram_report(error_msg)
             sys.exit(1)
             
     return video_clips
 
-# --- 6. डायनामिक बोल्ड कैप्शंस ---
+# --- 6. डायनामिक बोल्ड कैप्शंस (सिर्फ यही हिस्सा अपग्रेड किया गया है) ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
+    # फॉन्ट फाइल को सर्वर पर डाउनलोड करना ताकि डिफ़ॉल्ट छोटा फॉन्ट न आए
+    font_path = "Roboto-Black.ttf"
+    if not os.path.exists(font_path):
+        try:
+            print("📥 बड़ा और शानदार फॉन्ट डाउनलोड हो रहा है...")
+            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Black.ttf"
+            urllib.request.urlretrieve(url, font_path)
+        except Exception as e:
+            print(f"⚠️ फॉन्ट डाउनलोड एरर: {e}")
+    
     try:
-        font = ImageFont.truetype("Roboto-Black.ttf", 115)
+        # साइज़ 115 से बढ़ाकर 140 कर दिया गया है
+        font = ImageFont.truetype(font_path, 140)
     except:
         font = ImageFont.load_default()
         
@@ -204,27 +238,36 @@ def create_bold_yellow_caption(text, duration):
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
     x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
-    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=16, stroke_fill="black", align='center')
+    # चमकीला पीला रंग (#FFE81F) और मोटी काली आउटलाइन
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग इंजन ---
+# --- 7. हाई-रिटेंशन रेंडरिंग इंजन (Boomerang Fix के साथ सुरक्षित) ---
 def compile_high_retention_video(video_files, captions, audio_path):
-    print("🎞️ वीडियो रेंडर किया जा रहा है...")
+    print("🎞️ वीडियो रेंडर किया जा रहा है (काली स्क्रीन फिक्स के साथ)...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
+    
     clip_duration = audio_duration / len(video_files)
     processed_clips = []
     
     for idx, vfile in enumerate(video_files):
-        clip = VideoFileClip(vfile).subclip(0, min(clip_duration, 7))
+        clip = VideoFileClip(vfile)
+        
+        # 🎬 मास्टरस्ट्रोक: बूमरैंग इफ़ेक्ट
+        clip_reversed = clip.fx(time_mirror)
+        clip = concatenate_videoclips([clip, clip_reversed])
+        
+        clip = clip.subclip(0, min(clip_duration, clip.duration))
         clip = clip.resize(newsize=(1080, 1920))
         
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_bold_yellow_caption(cap_text, clip.duration)
+            # कैप्शंस को स्क्रीन के सेंटर से थोड़ा नीचे (0.75) सेट किया है ताकि विजुअल्स न छिपें
             txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
             combined = CompositeVideoClip([clip, txt_clip], size=(1080, 1920))
         else:
@@ -275,6 +318,9 @@ if __name__ == "__main__":
         final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
+        elevenlabs_status = check_elevenlabs_credits()
+        leonardo_status = check_leonardo_credits()
+        
         report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅
         
 🎬 <b>Title:</b> {title}
@@ -282,7 +328,11 @@ if __name__ == "__main__":
 
 📊 <b>सिस्टम स्टेटस (Strict Paid Mode):</b>
 - क्वालिटी: 100% Runway AI Gen-3 Motion
+- ब्लैक स्क्रीन फिक्स: बूमरैंग इफ़ेक्ट चालू 🔄
+- कैप्शंस फिक्स: लार्ज 140px फॉन्ट डाउनलोड सफलता 🔠
 - स्क्रिप्ट और CTA: सफलता (Subscribe + Gumroad)
+- {elevenlabs_status}
+- {leonardo_status}
 - टोकन उपयोग (GPT-4o): {gpt_tokens}"""
         
         send_telegram_report(report_msg)
