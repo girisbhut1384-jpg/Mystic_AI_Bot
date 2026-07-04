@@ -2,215 +2,249 @@ import os
 import sys
 import requests
 import time
+import urllib.parse
 import random
+import re
+import textwrap
 from openai import OpenAI
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
-# 🛠️ PIL बग फिक्स (वीडियो एडिटर को क्रैश होने से बचाने के लिए)
 if not hasattr(Image, 'Resampling'):
     Image.Resampling = getattr(Image, 'LANCZOS', 1)
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
-from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 
-# --- 1. प्रीमियम API चाबियां ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
+RUNWAY_KEY = os.environ.get("RUNWAYML_API_SECRET")
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY]):
-    print("❌ एरर: कोई ज़रूरी API Key या Token गायब है! GitHub Secrets चेक करें।")
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, RUNWAY_KEY]):
+    print("❌ एरर: कोई प्रीमियम चाबी गायब है! कृपया GitHub Secrets चेक करें।")
     sys.exit(1)
 
 client = OpenAI(api_key=OPENAI_KEY)
 
-# --- 2. OpenAI से डार्क मिस्ट्री स्क्रिप्ट और प्रॉम्प्ट्स लेना ---
-def get_mystery_script():
-    print("🧠 OpenAI से रहस्यमयी स्क्रिप्ट सोची जा रही है...")
-    prompt = """
-    Write a 40-second YouTube Short script about a terrifying, unsolved mystery or dark space anomaly in Hindi.
-    Format EXACTLY like this (No extra text):
-    TITLE: [Catchy Viral English Title]
-    PROMPT1: [Dark creepy highly detailed master cinematic image prompt 1]
-    PROMPT2: [Dark creepy highly detailed master cinematic image prompt 2]
-    PROMPT3: [Dark creepy highly detailed master cinematic image prompt 3]
-    PROMPT4: [Dark creepy highly detailed master cinematic image prompt 4]
-    SCRIPT: [Hindi voiceover script. Must have a strong 3-second hook. End with asking to subscribe]
+# --- 2. GPT-4o से 45-50 सेकंड की सस्पेंस स्क्रिप्ट और 6 प्रॉम्प्ट्स ---
+def get_viral_content():
+    print("🧠 GPT-4o से 50-सेकंड की खूंखार स्क्रिप्ट लिखी जा रही है...")
+    master_prompt = """
+    Write a high-retention 45-50 second YouTube Short script about a terrifying space or historical mystery in Hindi.
+    
+    STRICT RULES:
+    1. The first 3 seconds MUST be a brutal pattern interrupt. Start exactly with a shocking hook like: "क्या आप जानते हैं अंतरिक्ष के उस रहस्य के बारे में जो NASA आज भी हमसे छुपा रहा है? वह 1977 का सिग्नल... जिसने विज्ञान की दुनिया हिला दी थी।"
+    2. Write around 110-120 words in Hindi for a solid 45-50 second slow suspenseful delivery.
+    3. The Voiceover CTA at the very end must be exactly: "पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
+    4. Provide exactly 6 distinct image prompts for video generation.
+    5. Provide exactly 6 short, punchy phrases for on-screen captions matching the narrative arc.
+    
+    Return ONLY valid JSON format:
+    {
+      "title": "Viral Title Here 🔥",
+      "description": "SEO Description...",
+      "tags": ["mystery", "space", "viral"],
+      "script": "Complete Hindi script...",
+      "captions": ["PUNCHY PHRASE 1", "PUNCHY PHRASE 2", "PUNCHY PHRASE 3", "PUNCHY PHRASE 4", "PUNCHY PHRASE 5", "PUNCHY PHRASE 6"],
+      "prompts": ["Visual prompt 1", "Visual prompt 2", "Visual prompt 3", "Visual prompt 4", "Visual prompt 5", "Visual prompt 6"]
+    }
     """
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=400
+            model="gpt-4o", # सीधे आपके पेड GPT-4o का इस्तेमाल
+            messages=[{"role": "user", "content": master_prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.8
         )
-        text = response.choices[0].message.content
-        
-        title = text.split("TITLE:")[1].split("PROMPT1:")[0].strip()
-        p1 = text.split("PROMPT1:")[1].split("PROMPT2:")[0].strip()
-        p2 = text.split("PROMPT2:")[1].split("PROMPT3:")[0].strip()
-        p3 = text.split("PROMPT3:")[1].split("PROMPT4:")[0].strip()
-        p4 = text.split("PROMPT4:")[1].split("SCRIPT:")[0].strip()
-        script = text.split("SCRIPT:")[1].strip().replace("*", "")
-        
-        print(f"✅ स्क्रिप्ट और प्रॉम्प्ट तैयार: {title}")
-        return title, script, [p1, p2, p3, p4]
+        parsed = json.loads(response.choices[0].message.content)
+        return (
+            parsed["title"], parsed["description"], parsed["tags"],
+            parsed["script"].replace("*", ""), parsed["prompts"][:6], parsed["captions"][:6]
+        )
     except Exception as e:
-        print(f"❌ OpenAI एरर: {e}")
+        print(f"❌ GPT-4o एरर: {e}")
         sys.exit(1)
 
-# --- 3. ElevenLabs से सस्पेंस वाली आवाज़ (Rachel Voice) ---
-def generate_audio(script):
-    print("🎙️ ElevenLabs से प्रीमियम सस्पेंस आवाज़ बन रही है...")
-    voice_id = "21m00Tcm4TlvDq8ikWAM" 
+# --- 3. ElevenLabs से डीप मल्टीलिंग्वल वॉइसओवर ---
+def generate_premium_audio(script):
+    print("🎙️ ElevenLabs से डीप सस्पेंस वॉइसओवर बन रहा है...")
+    voice_id = "21m00Tcm4TlvDq8ikWAM" # Rachel / कस्टम वॉइस आईडी
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {"xi-api-key": ELEVEN_KEY, "Content-Type": "application/json"}
-    data = {"text": script, "model_id": "eleven_multilingual_v2"}
+    data = {"text": script, "model_id": "eleven_multilingual_v2", "voice_settings": {"stability": 0.4, "similarity_boost": 0.85}}
     
-    response = requests.post(url, json=data, headers=headers)
-    if response.status_code != 200:
-        print(f"❌ ElevenLabs एरर: {response.text}")
+    res = requests.post(url, json=data, headers=headers)
+    if res.status_code != 200:
+        print(f"❌ ElevenLabs फेल: {res.text}")
         sys.exit(1)
         
     audio_path = "voice.mp3"
     with open(audio_path, "wb") as f:
-        f.write(response.content)
-    print("✅ ऑडियो फाइल बन गई!")
+        f.write(res.content)
     return audio_path
 
-# --- 4. 👑 Leonardo AI से प्रीमियम इमेजेस जनरेट करना (Corrected API URL) ---
-def generate_leonardo_images(prompts):
-    print("🎨 Leonardo AI (Paid) से अल्ट्रा-एचडी तस्वीरें जनरेट हो रही हैं...")
-    image_files = []
+# --- 4. 👑 Leonardo AI + Runway ML का रियल-टाइम पेड कॉम्बिनेशन ---
+def generate_premium_videos(prompts):
+    video_clips = []
+    leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
+    leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
-    # बिल्कुल सही और नया Leonardo API एड्रेस
-    url_gen = "https://cloud.leonardo.ai/api/rest/v1/generations"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "authorization": f"Bearer {LEONARDO_KEY}"
-    }
+    runway_url = "https://api.gateway.runwayml.com/v1/image_to_video" # रनवे का लाइव API एंडपॉइंट
+    runway_headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06", "Content-Type": "application/json"}
     
     for i, p in enumerate(prompts):
-        fname = f"scene_{i}.jpg"
-        print(f"🎬 तस्वीर {i+1} का ऑर्डर लियोनार्डो को दिया जा रहा है...")
-        
-        payload = {
-            "height": 1024, # लियोनार्डो का स्टैण्डर्ड वर्टीकल साइज़ (Fail-safe)
-            "width": 576, 
-            "prompt": p + ", dark mystical atmosphere, hyper-detailed, 8k resolution, cinematic lighting",
-            "num_images": 1
-        }
+        vname = f"clip_{i}.mp4"
+        print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} के लिए बेस इमेज आर्डर की जा रही है...")
         
         try:
-            res = requests.post(url_gen, json=payload, headers=headers)
-            if res.status_code != 200:
-                print(f"⚠️ लियोनार्डो ऑर्डर एरर: {res.text}")
-                raise Exception("Leonardo API Refused")
-                
-            generation_id = res.json()["sdGenerationJob"]["generationId"]
+            # स्टेप A: लियोनार्डो से इमेज जेनरेट करना
+            payload = {"height": 1024, "width": 576, "modelId": "5c232e9a-9061-4be1-90ca-94d856b152e8", "prompt": p + ", dark creepy cinematic, 8k render", "num_images": 1}
+            res = requests.post(leo_url, json=payload, headers=leo_headers)
+            gen_id = res.json()["sdGenerationJob"]["generationId"]
             
-            # पोलिंग लूप (इंतज़ार करना)
-            url_check = f"https://cloud.leonardo.ai/api/rest/v1/generations/{generation_id}"
-            photo_url = None
-            
-            for check_attempt in range(15):
+            img_url = None
+            for _ in range(12):
                 time.sleep(10)
-                print(f"⏳ तस्वीर {i+1} के बनने का इंतज़ार हो रहा है ({check_attempt*10}s)...")
-                check_res = requests.get(url_check, headers=headers)
-                
-                if check_res.status_code == 200:
-                    gen_data = check_res.json()["generations_by_pk"]
-                    if gen_data["status"] == "COMPLETE":
-                        photo_url = gen_data["generated_images"][0]["url"]
-                        break
-                    elif gen_data["status"] == "FAILED":
-                        print("❌ लियोनार्डो सर्वर पर फोटो फेल हो गई।")
-                        break
+                check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
+                if check.json()["generations_by_pk"]["status"] == "COMPLETE":
+                    img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
+                    break
             
-            if photo_url:
-                img_data = requests.get(photo_url).content
-                with open(fname, "wb") as f:
-                    f.write(img_data)
-                
-                # इसे परफेक्ट यूट्यूब शॉर्ट्स (1080x1920) साइज में बड़ा (Upscale) करना
-                img = Image.open(fname).convert("RGB")
-                img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
-                img.save(fname)
-                
-                image_files.append(fname)
-                print(f"✅ तस्वीर {i+1} सफलतापूर्वक डाउनलोड हो गई!")
+            if not img_url:
+                raise Exception("Leonardo Timeout")
+
+            # स्टेप B: 🎬 रनवे एमएल को लियोनार्डो का सीधा URL भेजना (मोशन के लिए)
+            print(f"🎬 [रनवे एमएल] मोशन वीडियो बनाने के लिए इमेज ट्रांसफर की जा रही है...")
+            runway_payload = {
+                "model": "gen3a_turbo",
+                "promptImage": img_url,
+                "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
+                "duration": 5
+            }
+            r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
+            task_id = r_res.json()["id"]
+            
+            final_video_url = None
+            for _ in range(20):
+                time.sleep(10)
+                r_check = requests.get(f"https://api.gateway.runwayml.com/v1/tasks/{task_id}", headers=runway_headers)
+                status = r_check.json()["status"]
+                if status == "SUCCEEDED":
+                    final_video_url = r_check.json()["output"][0]
+                    break
+                elif status == "FAILED":
+                    break
+            
+            if final_video_url:
+                with open(vname, "wb") as f:
+                    f.write(requests.get(final_video_url).content)
+                video_clips.append(vname)
+                print(f"✅ दृश्य {i+1} का रनवे मोशन वीडियो तैयार!")
             else:
-                raise Exception("Timeout or Failed status")
+                raise Exception("Runway Failed/Timeout")
                 
         except Exception as e:
-            print(f"⚠️ लियोनार्डो में दिक्कत आई: {e}। सेफ्टी के लिए डार्क बैकग्राउंड इस्तेमाल कर रहे हैं...")
+            print(f"⚠️ पेड टूल्स में दिक्कत ({e}), ऑटो-रिकवरी चालू...")
+            # फ़ॉलबैक: यदि कोई एपीआई डाउन हो, तो ब्लैक स्क्रीन मोशन क्लिप जनरेट करना ताकि प्रोसेस न रुके
             fallback_img = Image.new('RGB', (1080, 1920), color=(10, 10, 25))
-            fallback_img.save(fname)
-            image_files.append(fname)
+            fallback_img.save(f"fb_{i}.jpg")
+            c = ImageClip(f"fb_{i}.jpg").set_duration(7)
+            c.write_videofile(vname, fps=24, codec="libx264", logger=None)
+            video_clips.append(vname)
             
-    return image_files
+    return video_clips
 
-# --- 5. वीडियो एडिटिंग (मोशन और ज़ूम के साथ) ---
-def create_video(audio_path, image_files):
-    print("🎬 वीडियो रेंडर हो रहा है (मोशन इफ़ेक्ट के साथ)...")
-    audio = AudioFileClip(audio_path)
-    img_duration = audio.duration / len(image_files) 
+# --- 5. 🎨 होर्मोजी स्टाइल डायनामिक बोल्ड येलो कैप्शंस मॉड्यूल ---
+def create_bold_yellow_caption(text, duration):
+    canvas_w, canvas_h = 1080, 400
+    img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
     
-    clips = []
-    for img in image_files:
-        clip = ImageClip(img).set_duration(img_duration)
-        clip = clip.resize(lambda t: 1 + 0.05 * t).set_position(('center', 'center'))
-        clips.append(clip)
+    try:
+        font = ImageFont.truetype("Roboto-Black.ttf", 115)
+    except:
+        font = ImageFont.load_default()
         
-    final_video = concatenate_videoclips(clips, method="compose")
-    final_video = final_video.set_audio(audio)
+    wrapped = textwrap.fill(text.upper(), width=14)
+    bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
+    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
-    output_file = "final_mystery_short.mp4"
-    final_video.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
+    x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
+    # चमकीला पीला रंग (#FFE81F) और 16px की भारी काली आउटलाइन
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=16, stroke_fill="black", align='center')
+    
+    temp_name = f"cap_{random.randint(1000,9999)}.png"
+    img.save(temp_name)
+    return ImageClip(temp_name).set_duration(duration)
+
+# --- 6. हाई-रिटेंशन रेंडरिंग इंजन ---
+def compile_high_retention_video(video_files, captions, audio_path):
+    print("🎞️ वीडियो, ऑडियो और डायनामिक कैप्शंस को आपस में सिंक किया जा रहा है...")
+    audio = AudioFileClip(audio_path)
+    audio_duration = audio.duration
+    
+    clip_duration = audio_duration / len(video_files)
+    processed_clips = []
+    
+    for idx, vfile in enumerate(video_files):
+        clip = VideoFileClip(vfile).subclip(0, min(clip_duration, 7))
+        clip = clip.resize(newsize=(1080, 1920)) # परफेक्ट वर्टिकल रिसाइज
+        
+        cap_text = captions[idx % len(captions)]
+        if cap_text.strip():
+            txt_clip = create_bold_yellow_caption(cap_text, clip.duration)
+            txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
+            combined = CompositeVideoClip([clip, txt_clip], size=(1080, 1920))
+        else:
+            combined = clip
+            
+        if idx > 0:
+            combined = combined.crossfadein(0.4) # मखमली स्मूथ कट्स
+            
+        processed_clips.append(combined)
+        
+    final_video = concatenate_videoclips(processed_clips, padding=-0.4, method="compose")
+    final_video = final_video.set_audio(audio).subclip(0, audio_duration)
+    
+    output_name = "final_viral_production.mp4"
+    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     
     audio.close()
     final_video.close()
-    print("✅ असली MP4 वीडियो 100% रेडी है!")
-    return output_file
+    return output_name
 
-# --- 6. YouTube पर अपलोड ---
-def upload_to_youtube(video_file, title, description):
-    print(f"📤 YouTube पर '{title}' अपलोड हो रहा है...")
+# --- 7. यूट्यूब मास्टर अपलोड ---
+def upload_to_youtube(video_file, title, description, tags):
+    print(f"📤 YouTube पर लाइव किया जा रहा है: '{title}'")
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
     youtube = build("youtube", "v3", credentials=creds)
     
     request_body = {
-        "snippet": {
-            "categoryId": "22",
-            "title": f"{title} #shorts",
-            "description": description,
-            "tags": ["shorts", "mystery", "unsolved", "creepy", "viral", "facts"]
-        },
-        "status": {
-            "privacyStatus": "public", 
-            "madeForKids": False
-        }
+        "snippet": {"categoryId": "22", "title": f"{title} #shorts", "description": description, "tags": tags},
+        "status": {"privacyStatus": "public", "madeForKids": False}
     }
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
-    request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
-    response = request.execute()
-    print(f"🎉 बधाई हो! वायरल मिस्ट्री वीडियो लाइव है: https://www.youtube.com/watch?v={response['id']}")
+    youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
+    print("🎉 वीडियो 100% सक्सेस के साथ आपके चैनल पर पब्लिक लाइव हो चुका है!")
 
 if __name__ == "__main__":
-    print("🚀 Mystery AI Engine स्टार्ट हो रहा है...")
-    title, script, prompts = get_mystery_script()
-    audio_path = generate_audio(script)
-    images = generate_leonardo_images(prompts)
-    final_video = create_video(audio_path, images)
+    print("👑 TITAN MYSTERY PRODUCTION ENGINE ONLINE 👑")
+    title, description, tags, script, prompts, captions = get_viral_content()
+    audio_path = generate_premium_audio(script)
+    video_files = generate_premium_videos(prompts)
+    final_output = compile_high_retention_video(video_files, captions, audio_path)
     
-    description = f"{title}\n\nदुनिया और अंतरिक्ष के सबसे खूंखार रहस्य! 🌌✨ #shorts #mystery #viral #creepy\n\n📝 Script:\n{script}"
-    upload_to_youtube(final_video, title, description)
-    print("✅ आज का काम पूरा हुआ! मशीन कल इसी समय अपने आप चालू होगी।")
+    # डिस्क्रिप्शन में आपके Gumroad का सीधा ट्रैफिक लिंक जोड़ना
+    gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
+    final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
+    
+    upload_to_youtube(final_output, title, final_desc, tags)
+    print("✅ आज की क्रेडिट का शत-प्रतिशत सही उपयोग संपन्न हुआ।")
