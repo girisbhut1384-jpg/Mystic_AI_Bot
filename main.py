@@ -18,7 +18,7 @@ if not hasattr(Image, 'ANTIALIAS'):
 
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 
-# --- प्रीमियम API क्रेडेंशियल्स ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
@@ -36,7 +36,7 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEO
 
 client = OpenAI(api_key=OPENAI_KEY)
 
-# --- टेलीग्राम रिपोर्ट फंक्शन ---
+# --- 2. टेलीग्राम रिपोर्ट फंक्शन ---
 def send_telegram_report(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
@@ -45,7 +45,7 @@ def send_telegram_report(message):
     except Exception as e:
         print(f"टेलीग्राम मैसेज एरर: {e}")
 
-# --- सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
+# --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
     print("🧠 GPT-4o से एकदम अनसुनी स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
@@ -86,7 +86,7 @@ def get_viral_content():
         send_telegram_report(f"❌ <b>GPT-4o एरर:</b> {e}")
         sys.exit(1)
 
-# --- प्रीमियम वॉयसओवर ---
+# --- 4. प्रीमियम वॉयसओवर (ElevenLabs) ---
 def generate_premium_audio(script):
     print("🎙️ ElevenLabs से डीप सस्पेंस वॉइसओवर बन रहा है...")
     voice_id = "21m00Tcm4TlvDq8ikWAM"
@@ -104,95 +104,91 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- हॉलीवुड-ग्रेड विजुअल्स (100% Fix + Retry System) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (STRICT PAID MODE - No Fallbacks) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
-    runway_url = "https://api.gateway.runwayml.com/v1/image_to_video"
+    # ✅ फिक्स: Runway का 100% सही और वेरीफाइड डेवलपर लिंक
+    runway_url = "https://api.dev.runwayml.com/v1/image_to_video"
     runway_headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06", "Content-Type": "application/json"}
     
     for i, p in enumerate(prompts):
         vname = f"clip_{i}.mp4"
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
-        success = False
-        # स्मार्ट री-ट्राई सिस्टम: 3 बार कोशिश करेगा
-        for attempt in range(3):
-            try:
-                print(f"👉 कोशिश {attempt + 1}...")
-                # फिक्स: 512x1024 सबसे सेफ वर्टिकल साइज है
-                payload = {
-                    "height": 1024, 
-                    "width": 512, 
-                    "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", 
-                    "num_images": 1
-                }
-                res = requests.post(leo_url, json=payload, headers=leo_headers)
-                if res.status_code != 200:
-                    raise Exception(f"Leonardo API Error: {res.text}")
-                    
-                gen_id = res.json()["sdGenerationJob"]["generationId"]
+        try:
+            # 1. Leonardo से 8K इमेज बनवाना (512x1024 वर्टिकल)
+            payload = {
+                "height": 1024, 
+                "width": 512, 
+                "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", 
+                "num_images": 1
+            }
+            res = requests.post(leo_url, json=payload, headers=leo_headers)
+            if res.status_code != 200:
+                raise Exception(f"Leonardo Error: {res.text}")
                 
-                img_url = None
-                for _ in range(12):
-                    time.sleep(10)
-                    check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
-                    if check.json()["generations_by_pk"]["status"] == "COMPLETE":
-                        img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
-                        break
-                
-                if not img_url:
-                    raise Exception("Leonardo Timeout - इमेज समय पर नहीं बनी")
+            gen_id = res.json()["sdGenerationJob"]["generationId"]
+            
+            img_url = None
+            for _ in range(12):
+                time.sleep(10)
+                check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
+                if check.json()["generations_by_pk"]["status"] == "COMPLETE":
+                    img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
+                    break
+            
+            if not img_url:
+                raise Exception("Leonardo Timeout")
 
-                print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है...")
-                runway_payload = {
-                    "model": "gen3a_turbo",
-                    "promptImage": img_url,
-                    "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
-                    "duration": 5
-                }
-                r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
+            # 2. Runway ML से मोशन (बिना किसी कॉम्प्रोमाइज़ के)
+            print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है (Strict Mode)...")
+            runway_payload = {
+                "model": "gen3a_turbo",
+                "promptImage": img_url,
+                "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
+                "duration": 5
+            }
+            
+            r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
+            if r_res.status_code not in [200, 201]:
+                raise Exception(f"Runway Server Issue: {r_res.text}")
                 
-                if r_res.status_code != 200:
-                    raise Exception(f"Runway API Error: {r_res.text}")
-                    
-                task_id = r_res.json()["id"]
+            task_id = r_res.json()["id"]
+            
+            final_video_url = None
+            for _ in range(30): # Runway को रेंडर करने के लिए पर्याप्त समय (5 मिनट तक)
+                time.sleep(10)
+                check_url = f"https://api.dev.runwayml.com/v1/tasks/{task_id}"
+                r_check = requests.get(check_url, headers=runway_headers)
                 
-                final_video_url = None
-                for _ in range(25):
-                    time.sleep(10)
-                    r_check = requests.get(f"https://api.gateway.runwayml.com/v1/tasks/{task_id}", headers=runway_headers)
+                if r_check.status_code == 200:
                     status = r_check.json()["status"]
                     if status == "SUCCEEDED":
                         final_video_url = r_check.json()["output"][0]
                         break
                     elif status == "FAILED":
-                        raise Exception("Runway Task Failed internally")
+                        raise Exception("Runway Task Failed Internally")
+            
+            if final_video_url:
+                with open(vname, "wb") as f:
+                    f.write(requests.get(final_video_url).content)
+                video_clips.append(vname)
+                print(f"✅ Runway मोशन वीडियो {i+1} सफल!")
+            else:
+                raise Exception("Runway Timeout - वीडियो समय पर नहीं बना")
                 
-                if final_video_url:
-                    with open(vname, "wb") as f:
-                        f.write(requests.get(final_video_url).content)
-                    video_clips.append(vname)
-                    success = True
-                    break # सफलता मिलने पर लूप से बाहर आ जाएं
-                else:
-                    raise Exception("Runway Timeout - वीडियो समय पर नहीं बना")
-                    
-            except Exception as e:
-                print(f"⚠️ एरर: {e}")
-                time.sleep(5) # अगली कोशिश से पहले 5 सेकंड का ब्रेक
-                
-        # अगर 3 कोशिशों के बाद भी सफलता नहीं मिली, तो कचरा वीडियो अपलोड करने से बेहतर है मशीन रोक दें।
-        if not success:
-            error_msg = f"❌ <b>इंजन रुका:</b> दृश्य {i+1} को 3 बार बनाने की कोशिश की गई लेकिन फेल हो गया। क्वालिटी ख़राब न हो इसलिए प्रोसेस रोक दिया गया है।"
+        except Exception as main_error:
+            # अब यह किसी फोटो का जुगाड़ नहीं करेगा। अगर AI फेल है, तो यह सीधा आपको रिपोर्ट करेगा।
+            error_msg = f"❌ <b>विजुअल क्रैश:</b> दृश्य {i+1} में गड़बड़ी आई। क्वालिटी से समझौता न करने के लिए प्रोसेस रोक दिया गया है। एरर: {main_error}"
             send_telegram_report(error_msg)
             sys.exit(1)
             
     return video_clips
 
-# --- डायनामिक बोल्ड कैप्शंस ---
+# --- 6. डायनामिक बोल्ड कैप्शंस ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -214,7 +210,7 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- हाई-रिटेंशन रेंडरिंग इंजन ---
+# --- 7. हाई-रिटेंशन रेंडरिंग इंजन ---
 def compile_high_retention_video(video_files, captions, audio_path):
     print("🎞️ वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
@@ -249,7 +245,7 @@ def compile_high_retention_video(video_files, captions, audio_path):
     final_video.close()
     return output_name
 
-# --- यूट्यूब अपलोड ---
+# --- 8. यूट्यूब अपलोड ---
 def upload_to_youtube(video_file, title, description, tags):
     print(f"📤 YouTube पर लाइव किया जा रहा है...")
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -268,7 +264,7 @@ def upload_to_youtube(video_file, title, description, tags):
 
 if __name__ == "__main__":
     try:
-        print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE 👑")
+        print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE (STRICT PAID MODE) 👑")
         
         title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
         audio_path = generate_premium_audio(script)
@@ -279,13 +275,13 @@ if __name__ == "__main__":
         final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
-        report_msg = f"""✅ <b>सुपर-वायरल वीडियो अपलोड हो गया!</b> ✅
+        report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅
         
 🎬 <b>Title:</b> {title}
 🔗 <b>YouTube Link:</b> <a href='{video_url}'>यहाँ क्लिक करके देखें</a>
 
-📊 <b>सिस्टम स्टेटस:</b>
-- क्वालिटी: 100% हॉलीवुड-ग्रेड (कोई काली स्क्रीन नहीं)
+📊 <b>सिस्टम स्टेटस (Strict Paid Mode):</b>
+- क्वालिटी: 100% Runway AI Gen-3 Motion
 - स्क्रिप्ट और CTA: सफलता (Subscribe + Gumroad)
 - टोकन उपयोग (GPT-4o): {gpt_tokens}"""
         
@@ -293,6 +289,6 @@ if __name__ == "__main__":
         print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
         
     except Exception as e:
-        error_msg = f"❌ <b>इंजन क्रैश हो गया:</b>\nएरर: {str(e)}"
+        error_msg = f"❌ <b>इंजन क्रैश हो गया (No Compromise Mode):</b>\nएरर: {str(e)}"
         send_telegram_report(error_msg)
         sys.exit(1)
