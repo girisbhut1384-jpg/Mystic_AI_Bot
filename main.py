@@ -51,8 +51,8 @@ def check_ram_usage():
     try:
         with open('/proc/meminfo', 'r') as f:
             lines = f.readlines()
-        total_ram = int(lines[0].split()[1]) / 1024 / 1024 # GB में
-        available_ram = int(lines[2].split()[1]) / 1024 / 1024 # GB में
+        total_ram = int(lines[0].split()[1]) / 1024 / 1024 
+        available_ram = int(lines[2].split()[1]) / 1024 / 1024 
         used_ram = total_ram - available_ram
         return f"सर्वर रैम (RAM) उपयोग: {used_ram:.2f} GB / {total_ram:.2f} GB"
     except:
@@ -222,7 +222,7 @@ def generate_premium_videos(prompts):
             
     return video_clips
 
-# --- 6. डायनामिक बोल्ड कैप्शंस ---
+# --- 6. डायनामिक बोल्ड कैप्शंस (✅ 404 फिक्स के साथ) ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -231,10 +231,12 @@ def create_bold_yellow_caption(text, duration):
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
         try:
-            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Black.ttf"
+            print("📥 बड़ा और शानदार फॉन्ट डाउनलोड हो रहा है...")
+            # ✅ Google Fonts का नया और वर्किंग लिंक (Apache Folder)
+            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Black.ttf"
             urllib.request.urlretrieve(url, font_path)
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ फॉन्ट डाउनलोड एरर: {e}")
     
     try:
         font = ImageFont.truetype(font_path, 140)
@@ -262,7 +264,6 @@ def compile_high_retention_video(video_files, captions, audio_path):
     processed_clips = []
     
     for idx, vfile in enumerate(video_files):
-        # 🎬 मेमोरी सुरक्षित रखने के लिए हर क्लिप को अलग से लोड करके जोड़ रहे हैं
         clip1 = VideoFileClip(vfile)
         clip2 = VideoFileClip(vfile)
         looped_clip = concatenate_videoclips([clip1, clip2])
@@ -283,7 +284,6 @@ def compile_high_retention_video(video_files, captions, audio_path):
             
         processed_clips.append(combined)
         
-        # 🧹 रैम को तुरंत खाली करना (Deep Clean)
         clip1.close()
         clip2.close()
         
@@ -330,7 +330,6 @@ if __name__ == "__main__":
         final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
-        # सभी रिपोर्ट्स कलेक्ट करना
         elevenlabs_status = check_elevenlabs_credits()
         leonardo_status = check_leonardo_credits()
         ram_status = check_ram_usage()
@@ -352,7 +351,6 @@ if __name__ == "__main__":
         print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
         
     except Exception as e:
-        # 🚨 किसी भी क्रैश का पूरा लाइव रिपोर्ट टेलीग्राम पर भेजना
         ram_crash_status = check_ram_usage()
         error_details = str(e)
         
