@@ -1,4 +1,4 @@
-import os
+Import os
 import sys
 import requests
 import time
@@ -27,12 +27,13 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
-LEONARDO_KEY = os.environ.get("LEONARDO_KEY")
+LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
+RUNWAY_KEY = os.environ.get("RUNWAYML_API_SECRET")
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, RUNWAY_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है! कृपया GitHub Secrets चेक करें।")
     sys.exit(1)
 
@@ -88,11 +89,24 @@ def get_viral_content():
     print("🧠 GPT-4o से एकदम अनसुनी स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
     Write an ULTRA-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, UNHEARD-OF and mind-blowing space or historical mystery in Hindi.
+    
     STRICT RULES:
     1. NO FLUFF: The mystery must be factually accurate, highly obscure, and actively increase knowledge.
     2. HOOK: First 3 seconds MUST be a brutal pattern interrupt.
-    3. CTA: The last sentence MUST be EXACTLY: "हमारे चैनल को सब्सक्राइब करें और पूरा सच जानने व ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
-    4. Return ONLY valid JSON: {"title": "", "description": "", "tags": [], "script": "", "captions": [], "prompts": []}
+    3. PACING: Exactly 110-120 words in Hindi for a 45-50 second delivery.
+    4. CTA: The last sentence MUST be EXACTLY: "हमारे चैनल को सब्सक्राइब करें और पूरा सच जानने व ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
+    5. PROMPTS: Provide 6 ultra-realistic image prompts. Keywords: "hyper-realistic, cinematic lighting, eerie, 8k".
+    6. CAPTIONS: Provide 6 short, punchy 2-3 word phrases for on-screen captions matching the story.
+    
+    Return ONLY valid JSON format:
+    {
+      "title": "Viral Title Here 🔥",
+      "description": "SEO Description...",
+      "tags": ["mystery", "space", "viral", "unheard story", "education"],
+      "script": "Complete Hindi script...",
+      "captions": ["PUNCHY PHRASE 1", "PUNCHY PHRASE 2", "PUNCHY PHRASE 3", "PUNCHY PHRASE 4", "PUNCHY PHRASE 5", "PUNCHY PHRASE 6"],
+      "prompts": ["Visual prompt 1", "Visual prompt 2", "Visual prompt 3", "Visual prompt 4", "Visual prompt 5", "Visual prompt 6"]
+    }
     """
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -124,20 +138,24 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. लियोनार्डो इमेज इंजन (No Runway) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Strict Paid Mode) ---
 def generate_premium_videos(prompts):
-    image_files = []
+    video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
+    runway_url = "https://api.dev.runwayml.com/v1/image_to_video"
+    runway_headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06", "Content-Type": "application/json"}
+    
     for i, p in enumerate(prompts):
-        fname = f"clip_{i}.jpg"
+        vname = f"clip_{i}.mp4"
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
         payload = {
-            "height": 1024, "width": 512, 
+            "height": 1024, 
+            "width": 512, 
             "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", 
-            "modelId": "6bef9f1b-29cb-40c7-b935-c3230a109968"
+            "num_images": 1
         }
         res = requests.post(leo_url, json=payload, headers=leo_headers)
         if res.status_code != 200:
@@ -145,6 +163,7 @@ def generate_premium_videos(prompts):
             
         gen_id = res.json()["sdGenerationJob"]["generationId"]
         
+        img_url = None
         for _ in range(15):
             time.sleep(10)
             check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
@@ -152,59 +171,200 @@ def generate_premium_videos(prompts):
                 img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
                 break
         
-        with open(fname, "wb") as f: f.write(requests.get(img_url).content)
-        image_files.append(fname)
-        print(f"✅ दृश्य {i+1} सफलता से सेव हो गया!")
-            
-    return image_files
+        if not img_url:
+            raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-# --- 6. डायनामिक बोल्ड कैप्शंस ---
+        print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है...")
+        runway_payload = {
+            "model": "gen3a_turbo",
+            "promptImage": img_url,
+            "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
+            "duration": 5
+        }
+        
+        r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
+        if r_res.status_code not in [200, 201]:
+            raise Exception(f"Runway सर्वर क्रैश: {r_res.text}")
+            
+        task_id = r_res.json()["id"]
+        
+        final_video_url = None
+        for _ in range(35): 
+            time.sleep(10)
+            check_url = f"https://api.dev.runwayml.com/v1/tasks/{task_id}"
+            r_check = requests.get(check_url, headers=runway_headers)
+            
+            if r_check.status_code == 200:
+                status = r_check.json()["status"]
+                if status == "SUCCEEDED":
+                    final_video_url = r_check.json()["output"][0]
+                    break
+                elif status == "FAILED":
+                    raise Exception("Runway टास्क फेल हो गया (सर्वर के अंदर से)")
+        
+        if final_video_url:
+            print(f"📥 वीडियो डाउनलोड किया जा रहा है...")
+            vid_res = requests.get(final_video_url, stream=True)
+            if vid_res.status_code == 200:
+                with open(vname, "wb") as f:
+                    for chunk in vid_res.iter_content(chunk_size=1024*1024):
+                        if chunk:
+                            f.write(chunk)
+                
+                if os.path.getsize(vname) < 10000:
+                    raise Exception("Runway से करप्ट (0 Byte) फाइल डाउनलोड हुई है। इंटरनेट का झटका लगा है।")
+                    
+                video_clips.append(vname)
+                print(f"✅ Runway वीडियो {i+1} सफलता से सेव हो गया!")
+            else:
+                raise Exception(f"Runway फाइल डाउनलोड फेल (Status: {vid_res.status_code})")
+        else:
+            raise Exception("Runway टाइमआउट - वीडियो समय पर रेंडर नहीं हुआ")
+            
+    return video_clips
+
+# --- 6. डायनामिक बोल्ड कैप्शंस (✅ 100% बुलेटप्रूफ फॉन्ट डाउनलोडर) ---
 def create_bold_yellow_caption(text, duration):
-    img = Image.new('RGBA', (1080, 400), (0, 0, 0, 0))
+    canvas_w, canvas_h = 1080, 400
+    img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
+    
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
-        urllib.request.urlretrieve("https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto-Black.ttf", font_path)
+        try:
+            # डायरेक्ट raw लिंक का इस्तेमाल ताकि कोई 404 या Redirect एरर न आए
+            url = "https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto-Black.ttf"
+            urllib.request.urlretrieve(url, font_path)
+        except:
+            pass
     
-    font = ImageFont.truetype(font_path, 140)
-    draw.multiline_text((540, 200), textwrap.fill(text.upper(), 14), font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", anchor="mm", align='center')
-    img.save("temp.png")
-    return ImageClip("temp.png").set_duration(duration)
+    try:
+        font = ImageFont.truetype(font_path, 140)
+    except:
+        font = ImageFont.load_default()
+        
+    wrapped = textwrap.fill(text.upper(), width=14)
+    bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
+    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    
+    x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", align='center')
+    
+    temp_name = f"cap_{random.randint(1000,9999)}.png"
+    img.save(temp_name)
+    return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग (मोशन ज़ूम के साथ) ---
-def compile_high_retention_video(img_files, captions, audio_path):
+# --- 7. हाई-रिटेंशन रेंडरिंग (✅ 100% सेफ लूप सिस्टम) ---
+def compile_high_retention_video(video_files, captions, audio_path):
     print("🎞️ वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
-    dur = audio.duration / len(img_files)
-    processed_clips = []
+    audio_duration = audio.duration
     
-    for i, ifile in enumerate(img_files):
-        # मोशन ज़ूम इफ़ेक्ट (इमेज को ही वीडियो बना दिया)
-        clip = ImageClip(ifile).set_duration(dur).resize(newsize=(1080, 1920)).resize(lambda t: 1 + 0.05 * t)
-        txt = create_bold_yellow_caption(captions[i % len(captions)], dur).set_position(('center', 0.75), relative=True)
-        combined = CompositeVideoClip([clip, txt], size=(1080, 1920))
+    clip_duration = audio_duration / len(video_files)
+    processed_clips = []
+    source_clips_to_close = [] 
+    
+    for idx, vfile in enumerate(video_files):
+        base_clip = VideoFileClip(vfile)
+        source_clips_to_close.append(base_clip)
+        
+        # ✅ लूप इफ़ेक्ट जो वीडियो को बिना रैम फुल किए आवाज़ के बराबर खींच लेगा
+        looped_clip = base_clip.fx(loop, duration=clip_duration)
+        final_looped = looped_clip.resize(newsize=(1080, 1920))
+        
+        cap_text = captions[idx % len(captions)]
+        if cap_text.strip():
+            txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
+            txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
+            combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
+        else:
+            combined = final_looped
+            
+        if idx > 0:
+            combined = combined.crossfadein(0.5)
+            
         processed_clips.append(combined)
         
-    final = concatenate_videoclips(processed_clips, method="compose").set_audio(audio)
-    final.write_videofile("final_viral_production.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", threads=4)
-    return "final_viral_production.mp4"
+    final_video = concatenate_videoclips(processed_clips, padding=-0.5, method="compose")
+    final_video = final_video.set_audio(audio).subclip(0, audio_duration)
+    
+    output_name = "final_viral_production.mp4"
+    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", threads=4, logger=None)
+    
+    audio.close()
+    final_video.close()
+    for c in source_clips_to_close + processed_clips:
+        try:
+            c.close()
+        except:
+            pass
+            
+    return output_name
 
 # --- 8. यूट्यूब अपलोड ---
 def upload_to_youtube(video_file, title, description, tags):
+    print(f"📤 YouTube पर लाइव किया जा रहा है...")
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
     youtube = build("youtube", "v3", credentials=creds)
-    body = {"snippet": {"title": title, "description": description, "tags": tags, "categoryId": "22"}, "status": {"privacyStatus": "public"}}
-    res = youtube.videos().insert(part="snippet,status", body=body, media_body=MediaFileUpload(video_file)).execute()
-    return f"https://youtu.be/{res['id']}"
+    
+    request_body = {
+        "snippet": {"categoryId": "22", "title": f"{title} #shorts", "description": description, "tags": tags},
+        "status": {"privacyStatus": "public", "madeForKids": False}
+    }
+    media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
+    response = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
+    
+    video_id = response.get("id")
+    print(f"🎉 वीडियो लाइव! ID: {video_id}")
+    return f"https://youtu.be/{video_id}"
 
 if __name__ == "__main__":
     try:
-        data = get_viral_content()
-        imgs = generate_premium_videos(data['prompts']) # Leonardo Images
-        vid = compile_high_retention_video(imgs, data['captions'], generate_premium_audio(data['script']))
-        link = upload_to_youtube(vid, data['title'], data['description'], data['tags'])
+        print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE 👑")
         
-        report = f"✅ <b>वीडियो लाइव:</b> {link}\n{check_ram_usage()}\n{check_elevenlabs_credits()}\n{check_leonardo_credits()}"
-        send_telegram_report(report)
+        title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
+        audio_path = generate_premium_audio(script)
+        video_files = generate_premium_videos(prompts)
+        final_output = compile_high_retention_video(video_files, captions, audio_path)
+        
+        gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
+        final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
+        video_url = upload_to_youtube(final_output, title, final_desc, tags)
+        
+        elevenlabs_status = check_elevenlabs_credits()
+        leonardo_status = check_leonardo_credits()
+        ram_status = check_ram_usage()
+        
+        report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅
+        
+🎬 <b>Title:</b> {title}
+🔗 <b>YouTube Link:</b> <a href='{video_url}'>यहाँ क्लिक करके देखें</a>
+
+📊 <b>सिस्टम और API स्टेटस:</b>
+- {ram_status}
+- {elevenlabs_status}
+- {leonardo_status}
+- टोकन उपयोग (GPT-4o): {gpt_tokens}
+- क्वालिटी: 100% Runway AI Gen-3 
+- अपलोड स्टेटस: सफलता (Subscribe + Gumroad)"""
+        
+        send_telegram_report(report_msg)
+        print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
+        
     except Exception as e:
-        send_telegram_report(f"❌ क्रैश रिपोर्ट: {str(e)}")
+        ram_crash_status = check_ram_usage()
+        error_details = str(e)
+        
+        crash_msg = f"""🚨 <b>मशीन क्रैश हो गई (वीडियो अपलोड नहीं हुआ)</b> 🚨
+        
+❌ <b>समस्या (इसे ठीक करें):</b> 
+{error_details}
+
+💻 <b>क्रैश के समय सर्वर का स्टेटस:</b>
+- {ram_crash_status}
+
+(यह गड़बड़ी API या कोडिंग की हो सकती है। ऊपर दी गई समस्या को सीटीओ (मुझे) भेजें।)"""
+        
+        send_telegram_report(crash_msg)
+        print(f"❌ इंजन क्रैश हो गया। डिटेल टेलीग्राम पर भेज दी गई है।")
+        sys.exit(1)
