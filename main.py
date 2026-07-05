@@ -18,7 +18,6 @@ if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
-from moviepy.video.fx.all import time_mirror 
 
 # --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -197,17 +196,15 @@ def generate_premium_videos(prompts):
                         raise Exception("Runway Task Failed Internally")
             
             if final_video_url:
-                # ✅ फिक्स: स्मार्ट चंक डाउनलोडर (Smart Chunk Downloader)
                 print(f"📥 वीडियो डाउनलोड किया जा रहा है...")
                 vid_res = requests.get(final_video_url, stream=True)
                 if vid_res.status_code == 200:
                     with open(vname, "wb") as f:
-                        for chunk in vid_res.iter_content(chunk_size=1024*1024): # 1MB चंक्स
+                        for chunk in vid_res.iter_content(chunk_size=1024*1024):
                             if chunk:
                                 f.write(chunk)
                     
-                    # ✅ फिक्स: फाइल करप्शन वेरिफिकेशन
-                    if os.path.getsize(vname) < 10000: # अगर फाइल 10KB से छोटी है, तो वह करप्ट है
+                    if os.path.getsize(vname) < 10000:
                         raise Exception("Runway से करप्ट (0 Byte) फाइल डाउनलोड हुई है।")
                         
                     video_clips.append(vname)
@@ -254,9 +251,9 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग इंजन ---
+# --- 7. हाई-रिटेंशन रेंडरिंग इंजन (Memory Safe Loop Fix) ---
 def compile_high_retention_video(video_files, captions, audio_path):
-    print("🎞️ वीडियो रेंडर किया जा रहा है (काली स्क्रीन फिक्स के साथ)...")
+    print("🎞️ वीडियो रेंडर किया जा रहा है (मेमोरी सेफ लूप फिक्स के साथ)...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
     
@@ -266,8 +263,8 @@ def compile_high_retention_video(video_files, captions, audio_path):
     for idx, vfile in enumerate(video_files):
         clip = VideoFileClip(vfile)
         
-        clip_reversed = clip.fx(time_mirror)
-        clip = concatenate_videoclips([clip, clip_reversed])
+        # 🎬 नया फिक्स: भारी 'रिवर्स' इफेक्ट की जगह सुरक्षित 'लूप' ताकि सर्वर क्रैश न हो।
+        clip = concatenate_videoclips([clip, clip])
         
         clip = clip.subclip(0, min(clip_duration, clip.duration))
         clip = clip.resize(newsize=(1080, 1920))
@@ -289,7 +286,8 @@ def compile_high_retention_video(video_files, captions, audio_path):
     final_video = final_video.set_audio(audio).subclip(0, audio_duration)
     
     output_name = "final_viral_production.mp4"
-    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="fast", logger=None)
+    # ✅ मेमोरी बचाने के लिए preset="ultrafast" और threads=4 सेट किया है
+    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", threads=4, logger=None)
     
     audio.close()
     final_video.close()
@@ -335,7 +333,7 @@ if __name__ == "__main__":
 
 📊 <b>सिस्टम स्टेटस (Strict Paid Mode):</b>
 - क्वालिटी: 100% Runway AI Gen-3 Motion
-- ब्लैक स्क्रीन फिक्स: बूमरैंग इफ़ेक्ट चालू 🔄
+- ब्लैक स्क्रीन फिक्स: मेमोरी सेफ लूप चालू 🔄
 - कैप्शंस फिक्स: लार्ज 140px फॉन्ट डाउनलोड सफलता 🔠
 - स्क्रिप्ट और CTA: सफलता (Subscribe + Gumroad)
 - {elevenlabs_status}
