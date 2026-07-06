@@ -1,4 +1,4 @@
-Import os
+import os
 import sys
 import requests
 import time
@@ -28,12 +28,12 @@ REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
-RUNWAY_KEY = os.environ.get("RUNWAYML_API_SECRET")
+# RUNWAY_KEY यहाँ से हटा दिया गया है
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, RUNWAY_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है! कृपया GitHub Secrets चेक करें।")
     sys.exit(1)
 
@@ -138,17 +138,14 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Strict Paid Mode) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (सिर्फ Leonardo) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
-    runway_url = "https://api.dev.runwayml.com/v1/image_to_video"
-    runway_headers = {"Authorization": f"Bearer {RUNWAY_KEY}", "X-Runway-Version": "2024-11-06", "Content-Type": "application/json"}
-    
     for i, p in enumerate(prompts):
-        vname = f"clip_{i}.mp4"
+        vname = f"clip_{i}.jpg" # Runway की जगह अब .jpg में सेव होगा
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
         payload = {
@@ -174,52 +171,18 @@ def generate_premium_videos(prompts):
         if not img_url:
             raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-        print(f"🎬 [रनवे एमएल] मोशन वीडियो बन रहा है...")
-        runway_payload = {
-            "model": "gen3a_turbo",
-            "promptImage": img_url,
-            "promptText": "slow cinematic camera zoom in, eerie atmospheric smoke movement, highly realistic",
-            "duration": 5
-        }
-        
-        r_res = requests.post(runway_url, json=runway_payload, headers=runway_headers)
-        if r_res.status_code not in [200, 201]:
-            raise Exception(f"Runway सर्वर क्रैश: {r_res.text}")
+        print(f"📥 दृश्य डाउनलोड किया जा रहा है...")
+        vid_res = requests.get(img_url, stream=True)
+        if vid_res.status_code == 200:
+            with open(vname, "wb") as f:
+                for chunk in vid_res.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        f.write(chunk)
             
-        task_id = r_res.json()["id"]
-        
-        final_video_url = None
-        for _ in range(35): 
-            time.sleep(10)
-            check_url = f"https://api.dev.runwayml.com/v1/tasks/{task_id}"
-            r_check = requests.get(check_url, headers=runway_headers)
-            
-            if r_check.status_code == 200:
-                status = r_check.json()["status"]
-                if status == "SUCCEEDED":
-                    final_video_url = r_check.json()["output"][0]
-                    break
-                elif status == "FAILED":
-                    raise Exception("Runway टास्क फेल हो गया (सर्वर के अंदर से)")
-        
-        if final_video_url:
-            print(f"📥 वीडियो डाउनलोड किया जा रहा है...")
-            vid_res = requests.get(final_video_url, stream=True)
-            if vid_res.status_code == 200:
-                with open(vname, "wb") as f:
-                    for chunk in vid_res.iter_content(chunk_size=1024*1024):
-                        if chunk:
-                            f.write(chunk)
-                
-                if os.path.getsize(vname) < 10000:
-                    raise Exception("Runway से करप्ट (0 Byte) फाइल डाउनलोड हुई है। इंटरनेट का झटका लगा है।")
-                    
-                video_clips.append(vname)
-                print(f"✅ Runway वीडियो {i+1} सफलता से सेव हो गया!")
-            else:
-                raise Exception(f"Runway फाइल डाउनलोड फेल (Status: {vid_res.status_code})")
+            video_clips.append(vname)
+            print(f"✅ लियोनार्डो दृश्य {i+1} सफलता से सेव हो गया!")
         else:
-            raise Exception("Runway टाइमआउट - वीडियो समय पर रेंडर नहीं हुआ")
+            raise Exception(f"Leonardo फाइल डाउनलोड फेल (Status: {vid_res.status_code})")
             
     return video_clips
 
@@ -232,7 +195,6 @@ def create_bold_yellow_caption(text, duration):
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
         try:
-            # डायरेक्ट raw लिंक का इस्तेमाल ताकि कोई 404 या Redirect एरर न आए
             url = "https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto-Black.ttf"
             urllib.request.urlretrieve(url, font_path)
         except:
@@ -254,9 +216,9 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग (✅ 100% सेफ लूप सिस्टम) ---
+# --- 7. हाई-रिटेंशन रेंडरिंग (✅ Leonardo Motion Zoom Effect) ---
 def compile_high_retention_video(video_files, captions, audio_path):
-    print("🎞️ वीडियो रेंडर किया जा रहा है...")
+    print("🎞️ वीडियो रेंडर किया जा रहा है (मोशन इफेक्ट के साथ)...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
     
@@ -265,16 +227,16 @@ def compile_high_retention_video(video_files, captions, audio_path):
     source_clips_to_close = [] 
     
     for idx, vfile in enumerate(video_files):
-        base_clip = VideoFileClip(vfile)
+        # यहाँ VideoFileClip की जगह ImageClip का इस्तेमाल किया गया है
+        base_clip = ImageClip(vfile).set_duration(clip_duration)
         source_clips_to_close.append(base_clip)
         
-        # ✅ लूप इफ़ेक्ट जो वीडियो को बिना रैम फुल किए आवाज़ के बराबर खींच लेगा
-        looped_clip = base_clip.fx(loop, duration=clip_duration)
-        final_looped = looped_clip.resize(newsize=(1080, 1920))
+        # ✅ यह रहा मोशन इफ़ेक्ट: इमेज को वीडियो की तरह धीरे-धीरे ज़ूम करना
+        final_looped = base_clip.resize(newsize=(1080, 1920)).resize(lambda t: 1 + 0.05 * t)
         
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
-            txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
+            txt_clip = create_bold_yellow_caption(cap_text, clip_duration)
             txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
             combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
         else:
@@ -345,7 +307,7 @@ if __name__ == "__main__":
 - {elevenlabs_status}
 - {leonardo_status}
 - टोकन उपयोग (GPT-4o): {gpt_tokens}
-- क्वालिटी: 100% Runway AI Gen-3 
+- क्वालिटी: 100% Leonardo Motion Zoom
 - अपलोड स्टेटस: सफलता (Subscribe + Gumroad)"""
         
         send_telegram_report(report_msg)
