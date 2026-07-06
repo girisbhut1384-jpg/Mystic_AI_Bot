@@ -28,7 +28,6 @@ REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
-# RUNWAY_KEY यहाँ से हटा दिया गया है
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -138,16 +137,17 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (सिर्फ Leonardo) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (लियोनार्डो मोशन इंजन) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
     for i, p in enumerate(prompts):
-        vname = f"clip_{i}.jpg" # Runway की जगह अब .jpg में सेव होगा
+        vname = f"clip_{i}.jpg" 
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
         
+        # ✅ यहाँ से modelId हटा दिया गया है ताकि कोई 404 एरर न आए
         payload = {
             "height": 1024, 
             "width": 512, 
@@ -218,7 +218,7 @@ def create_bold_yellow_caption(text, duration):
 
 # --- 7. हाई-रिटेंशन रेंडरिंग (✅ Leonardo Motion Zoom Effect) ---
 def compile_high_retention_video(video_files, captions, audio_path):
-    print("🎞️ वीडियो रेंडर किया जा रहा है (मोशन इफेक्ट के साथ)...")
+    print("🎞️ वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
     
@@ -227,11 +227,10 @@ def compile_high_retention_video(video_files, captions, audio_path):
     source_clips_to_close = [] 
     
     for idx, vfile in enumerate(video_files):
-        # यहाँ VideoFileClip की जगह ImageClip का इस्तेमाल किया गया है
         base_clip = ImageClip(vfile).set_duration(clip_duration)
         source_clips_to_close.append(base_clip)
         
-        # ✅ यह रहा मोशन इफ़ेक्ट: इमेज को वीडियो की तरह धीरे-धीरे ज़ूम करना
+        # ✅ मोशन इफ़ेक्ट: इमेज को वीडियो की तरह ज़ूम करना
         final_looped = base_clip.resize(newsize=(1080, 1920)).resize(lambda t: 1 + 0.05 * t)
         
         cap_text = captions[idx % len(captions)]
