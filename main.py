@@ -28,6 +28,7 @@ REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
+# RUNWAY_KEY अब पूरी तरह हट चुका है
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -85,17 +86,18 @@ def check_leonardo_credits():
 
 # --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
-    print("🧠 GPT-4o से एकदम अनसुनी स्क्रिप्ट लिखी जा रही है...")
+    print("🧠 GPT-4o से एकदम हाई-क्वालिटी वायरल स्क्रिप्ट लिखी जा रही है...")
+    # ✅ स्क्रिप्ट में भारी सुधार: घिसी-पिटी बातें बैन कर दी गई हैं।
     master_prompt = """
-    Write an ULTRA-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, UNHEARD-OF and mind-blowing space or historical mystery in Hindi.
+    Write a HYPER-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, highly obscure historical or space mystery in Hindi.
     
-    STRICT RULES:
-    1. NO FLUFF: The mystery must be factually accurate, highly obscure, and actively increase knowledge.
-    2. HOOK: First 3 seconds MUST be a brutal pattern interrupt.
-    3. PACING: Exactly 110-120 words in Hindi for a 45-50 second delivery.
-    4. CTA: The last sentence MUST be EXACTLY: "हमारे चैनल को सब्सक्राइब करें और पूरा सच जानने व ऐसे ही रहस्यों को अनलॉक करने के लिए, डिस्क्रिप्शन में दिए गए लिंक पर क्लिक करें।"
-    5. PROMPTS: Provide 6 ultra-realistic image prompts. Keywords: "hyper-realistic, cinematic lighting, eerie, 8k".
-    6. CAPTIONS: Provide 6 short, punchy 2-3 word phrases for on-screen captions matching the story.
+    CRITICAL RULES:
+    1. AVOID CLICHÉS: DO NOT use generic phrases like "वैज्ञानिक भी हैरान हैं" or "बिना मशीनों के कैसे बना". Provide SPECIFIC, deep, and mind-blowing facts.
+    2. HOOK: First 3 seconds MUST be a direct, shocking question or brutal pattern interrupt.
+    3. PACING: Exactly 110-120 words in Hindi for a fast-paced delivery.
+    4. CTA: Only say "ऐसे ही रहस्यों के लिए सब्सक्राइब करें।" Do NOT ask them to check the description.
+    5. PROMPTS: Provide 6 ultra-detailed Midjourney-v6 style image prompts. Keywords: "masterpiece, hyper-realistic, highly detailed, dark cinematic lighting, 8k resolution, unreal engine 5 render".
+    6. CAPTIONS: Provide 6 short, punchy 2-3 word phrases for on-screen text.
     
     Return ONLY valid JSON format:
     {
@@ -137,42 +139,71 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (लियोनार्डो मोशन इंजन) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (असली Leonardo Motion AI) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
+    motion_url = "https://cloud.leonardo.ai/api/rest/v1/generations-motion-svd"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
     for i, p in enumerate(prompts):
-        vname = f"clip_{i}.jpg" 
-        print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} तैयार हो रहा है...")
+        vname = f"clip_{i}.mp4" 
         
-        # ✅ यहाँ से modelId हटा दिया गया है ताकि कोई 404 एरर न आए
+        # 🟢 स्टेप 1: पहले एक हाई-क्वालिटी 8K इमेज बनाना
+        print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} की 8K बेस इमेज बन रही है...")
         payload = {
             "height": 1024, 
             "width": 512, 
-            "prompt": p + ", masterpiece, hyper-realistic, dark cinematic lighting, 8k", 
+            "prompt": p, 
             "num_images": 1
         }
         res = requests.post(leo_url, json=payload, headers=leo_headers)
         if res.status_code != 200:
-            raise Exception(f"Leonardo API एरर: {res.text}")
+            raise Exception(f"Leonardo Image API एरर: {res.text}")
             
         gen_id = res.json()["sdGenerationJob"]["generationId"]
         
-        img_url = None
-        for _ in range(15):
-            time.sleep(10)
+        img_id = None
+        for _ in range(20): # इमेज के लिए इंतज़ार
+            time.sleep(6)
             check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{gen_id}", headers=leo_headers)
-            if check.json()["generations_by_pk"]["status"] == "COMPLETE":
-                img_url = check.json()["generations_by_pk"]["generated_images"][0]["url"]
+            status = check.json()["generations_by_pk"]["status"]
+            if status == "COMPLETE":
+                img_id = check.json()["generations_by_pk"]["generated_images"][0]["id"]
                 break
-        
-        if not img_url:
+            elif status == "FAILED":
+                raise Exception("Leonardo बेस इमेज फेल हो गई।")
+                
+        if not img_id:
             raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-        print(f"📥 दृश्य डाउनलोड किया जा रहा है...")
-        vid_res = requests.get(img_url, stream=True)
+        # 🟢 स्टेप 2: उस इमेज को असली वीडियो में बदलना (Leonardo Motion AI)
+        print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (Real AI Video)...")
+        m_payload = {"imageId": img_id, "motionStrength": 5}
+        m_res = requests.post(motion_url, json=m_payload, headers=leo_headers)
+        if m_res.status_code != 200:
+            raise Exception(f"Leonardo Motion API एरर: {m_res.text}")
+            
+        m_gen_id = m_res.json()["motionSvdGenerationJob"]["generationId"]
+        
+        vid_url = None
+        for _ in range(30): # वीडियो रेंडरिंग के लिए इंतज़ार
+            time.sleep(8)
+            m_check = requests.get(f"https://cloud.leonardo.ai/api/rest/v1/generations/{m_gen_id}", headers=leo_headers)
+            m_status = m_check.json()["generations_by_pk"]["status"]
+            if m_status == "COMPLETE":
+                gen_imgs = m_check.json()["generations_by_pk"]["generated_images"][0]
+                vid_url = gen_imgs.get("motionMP4URL") or gen_imgs.get("url")
+                break
+            elif m_status == "FAILED":
+                raise Exception("Leonardo Motion वीडियो फेल हो गया।")
+                
+        if not vid_url:
+            raise Exception("Leonardo Motion टाइमआउट - वीडियो रेंडर नहीं हुआ")
+
+        # 🟢 स्टेप 3: असली .mp4 वीडियो डाउनलोड करना
+        print(f"📥 असली मोशन वीडियो डाउनलोड किया जा रहा है...")
+        vid_res = requests.get(vid_url, stream=True)
         if vid_res.status_code == 200:
             with open(vname, "wb") as f:
                 for chunk in vid_res.iter_content(chunk_size=1024*1024):
@@ -180,9 +211,9 @@ def generate_premium_videos(prompts):
                         f.write(chunk)
             
             video_clips.append(vname)
-            print(f"✅ लियोनार्डो दृश्य {i+1} सफलता से सेव हो गया!")
+            print(f"✅ लियोनार्डो वीडियो {i+1} सफलता से सेव हो गया!")
         else:
-            raise Exception(f"Leonardo फाइल डाउनलोड फेल (Status: {vid_res.status_code})")
+            raise Exception(f"Leonardo वीडियो फाइल डाउनलोड फेल (Status: {vid_res.status_code})")
             
     return video_clips
 
@@ -216,9 +247,9 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग (✅ Leonardo Motion Zoom Effect) ---
+# --- 7. हाई-रिटेंशन रेंडरिंग (Real Video Compiler) ---
 def compile_high_retention_video(video_files, captions, audio_path):
-    print("🎞️ वीडियो रेंडर किया जा रहा है...")
+    print("🎞️ असली मोशन वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
     
@@ -227,15 +258,17 @@ def compile_high_retention_video(video_files, captions, audio_path):
     source_clips_to_close = [] 
     
     for idx, vfile in enumerate(video_files):
-        base_clip = ImageClip(vfile).set_duration(clip_duration)
+        # अब यह वापस असली वीडियो क्लिप है, इमेज नहीं
+        base_clip = VideoFileClip(vfile)
         source_clips_to_close.append(base_clip)
         
-        # ✅ मोशन इफ़ेक्ट: इमेज को वीडियो की तरह ज़ूम करना
-        final_looped = base_clip.resize(newsize=(1080, 1920)).resize(lambda t: 1 + 0.05 * t)
+        # वीडियो को ऑडियो के हिस्से के बराबर लूप करना ताकि कोई ब्लैक स्क्रीन न आए
+        looped_clip = base_clip.fx(loop, duration=clip_duration)
+        final_looped = looped_clip.resize(newsize=(1080, 1920))
         
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
-            txt_clip = create_bold_yellow_caption(cap_text, clip_duration)
+            txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
             txt_clip = txt_clip.set_position(('center', 0.75), relative=True)
             combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
         else:
@@ -285,11 +318,12 @@ if __name__ == "__main__":
         
         title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
         audio_path = generate_premium_audio(script)
-        video_files = generate_premium_videos(prompts)
+        video_files = generate_premium_videos(prompts) # असली मोशन वीडियो
         final_output = compile_high_retention_video(video_files, captions, audio_path)
         
         gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
-        final_desc = f"{description}\n\n🚀 👉 पूरा सच जानने और ऐसे ही रहस्यों को अनलॉक करने के लिए यहाँ क्लिक करें:\n🔗 {gumroad_link}\n\n📝 Script:\n{script}"
+        # डिस्क्रिप्शन में अब नया बदलाव ताकि यह स्पैम न लगे
+        final_desc = f"{description}\n\n🌟 और अधिक गहराई से जानने के लिए विजिट करें:\n🔗 {gumroad_link}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
         elevenlabs_status = check_elevenlabs_credits()
@@ -306,8 +340,8 @@ if __name__ == "__main__":
 - {elevenlabs_status}
 - {leonardo_status}
 - टोकन उपयोग (GPT-4o): {gpt_tokens}
-- क्वालिटी: 100% Leonardo Motion Zoom
-- अपलोड स्टेटस: सफलता (Subscribe + Gumroad)"""
+- क्वालिटी: 100% Real Leonardo Motion AI Video
+- अपलोड स्टेटस: सफलता"""
         
         send_telegram_report(report_msg)
         print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
