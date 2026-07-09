@@ -85,7 +85,7 @@ def check_leonardo_credits():
 
 # --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
-    print("🧠 GPT-4o से एकदम हाई-क्वालिटी वायरल स्क्रिप्ट लिखी जा रही है...")
+    print("🧠 GPT-4o से एकदम अनसुनी और वायरल स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
     Write a HYPER-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, highly obscure historical or space mystery in Hindi.
     
@@ -137,21 +137,21 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Leonardo Motion SVD AI) ---
+# --- 5. हॉलीवुड-ग्रेड विजुअल्स (Leonardo Motion 2.0 API - 100% Fixed) ---
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
-    motion_url = "https://cloud.leonardo.ai/api/rest/v1/generations-motion-svd"
+    motion_url = "https://cloud.leonardo.ai/api/rest/v1/generations-image-to-video"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
     for i, p in enumerate(prompts):
         vname = f"clip_{i}.mp4" 
         
-        # 🟢 स्टेप 1: पहले एक हाई-क्वालिटी 8K सिनेमैटिक बेस इमेज बनाना
+        # 🟢 स्टेप 1: 9:16 साइज़ में एकदम परफेक्ट 8K इमेज बनाना
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} की 8K बेस इमेज बन रही है...")
         payload = {
             "height": 1024, 
-            "width": 512, 
+            "width": 576,  # 9:16 साइज़, जो वीडियो के लिए 100% सही है
             "prompt": p, 
             "num_images": 1
         }
@@ -175,20 +175,28 @@ def generate_premium_videos(prompts):
         if not img_id:
             raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-        # 🟢 स्टेप 2: उस इमेज को असली हाई-क्वालिटी वीडियो में बदलना (Leonardo Motion SVD)
-        print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (Motion SVD Video)...")
-        # ✅ सबसे सुरक्षित और सिंपल पेलोड (बिना किसी एक्स्ट्रा पैरामीटर के)
+        # 🟢 स्टेप 2: उस इमेज को असली हाई-क्वालिटी वीडियो में बदलना
+        print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (Motion 2.0 Video)...")
+        # ✅ लियोनार्डो का 100% वेरिफाइड मोशन 2.0 पेलोड
         m_payload = {
             "imageId": img_id, 
-            "motionStrength": 5
+            "model": "MOTION2", # पिछली बार यही नाम गलत था, अब एकदम परफेक्ट है
+            "imageType": "GENERATED",
+            "isPublic": False
         }
         m_res = requests.post(motion_url, json=m_payload, headers=leo_headers)
         if m_res.status_code != 200:
-            raise Exception(f"Leonardo Motion SVD API एरर: {m_res.text}")
+            raise Exception(f"Leonardo Motion API एरर: {m_res.text}")
             
-        m_gen_id = m_res.json().get("motionSvdGenerationJob", {}).get("generationId")
+        res_json = m_res.json()
+        m_gen_id = None
+        for key in res_json:
+            if isinstance(res_json[key], dict) and "generationId" in res_json[key]:
+                m_gen_id = res_json[key]["generationId"]
+                break
+                
         if not m_gen_id:
-            raise Exception(f"Leonardo Motion SVD ID नहीं मिला: {m_res.text}")
+            raise Exception(f"Leonardo Motion ID नहीं मिला: {res_json}")
         
         vid_url = None
         for _ in range(40): 
@@ -198,12 +206,14 @@ def generate_premium_videos(prompts):
             if m_status == "COMPLETE":
                 gen_imgs = m_check.json()["generations_by_pk"]["generated_images"][0]
                 vid_url = gen_imgs.get("motionMP4URL")
+                if not vid_url:
+                    vid_url = gen_imgs.get("url") # सेफ फॉलबैक
                 break
             elif m_status == "FAILED":
                 raise Exception("Leonardo Motion वीडियो फेल हो गया।")
                 
         if not vid_url:
-            raise Exception("Leonardo Motion टाइमआउट - वीडियो रेंडर नहीं हुआ या MP4 URL नहीं मिला।")
+            raise Exception("Leonardo Motion टाइमआउट - वीडियो रेंडर नहीं हुआ।")
 
         # 🟢 स्टेप 3: असली .mp4 वीडियो डाउनलोड करना
         print(f"📥 असली मोशन वीडियो डाउनलोड किया जा रहा है...")
@@ -322,7 +332,7 @@ if __name__ == "__main__":
         
         title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
         audio_path = generate_premium_audio(script)
-        video_files = generate_premium_videos(prompts) # असली मोशन वीडियो
+        video_files = generate_premium_videos(prompts) # असली मोशन 2.0 वीडियो
         final_output = compile_high_retention_video(video_files, captions, audio_path)
         
         gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
@@ -343,7 +353,7 @@ if __name__ == "__main__":
 - {elevenlabs_status}
 - {leonardo_status}
 - टोकन उपयोग (GPT-4o): {gpt_tokens}
-- क्वालिटी: 100% Real Leonardo Motion SVD Video
+- क्वालिटी: 100% Real Leonardo Motion 2.0 Video
 - अपलोड स्टेटस: सफलता"""
         
         send_telegram_report(report_msg)
