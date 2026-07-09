@@ -141,7 +141,6 @@ def generate_premium_audio(script):
 def generate_premium_videos(prompts):
     video_clips = []
     leo_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
-    # ✅ बिल्कुल सही और टेस्टेड मोशन API
     motion_url = "https://cloud.leonardo.ai/api/rest/v1/generations-motion-svd"
     leo_headers = {"accept": "application/json", "content-type": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
     
@@ -178,11 +177,10 @@ def generate_premium_videos(prompts):
 
         # 🟢 स्टेप 2: उस इमेज को असली हाई-क्वालिटी वीडियो में बदलना (Leonardo Motion SVD)
         print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (Motion SVD Video)...")
+        # ✅ सबसे सुरक्षित और सिंपल पेलोड (बिना किसी एक्स्ट्रा पैरामीटर के)
         m_payload = {
             "imageId": img_id, 
-            "motionStrength": 5,
-            "isPublic": False,
-            "isInitImage": False
+            "motionStrength": 5
         }
         m_res = requests.post(motion_url, json=m_payload, headers=leo_headers)
         if m_res.status_code != 200:
