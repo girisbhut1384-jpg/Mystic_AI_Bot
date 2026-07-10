@@ -21,7 +21,7 @@ if not hasattr(Image, 'ANTIALIAS'):
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 from moviepy.video.fx.all import loop 
 
-# --- 1. प्रीमियम API क्रेडेंशियल्स ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स (सीधे GitHub Secrets से ऑटो-लोड) ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
@@ -32,6 +32,7 @@ LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+# सुरक्षा जांच: अगर कोई चाबी गायब होगी तो मशीन यही रुक जाएगी
 if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है! कृपया GitHub Secrets चेक करें।")
     sys.exit(1)
@@ -83,7 +84,7 @@ def check_leonardo_credits():
     except: 
         return "Leonardo: चेक विफल"
 
-# --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) - HIGH QUALITY UPDATE ---
+# --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
     print("🧠 GPT-4o से एकदम हाई-क्वालिटी वायरल स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
@@ -149,7 +150,6 @@ def generate_premium_videos(prompts):
         
         # 🟢 स्टेप 1: 9:16 साइज़ में 8K शार्प बेस इमेज बनाना
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} की 8K बेस इमेज बन रही है...")
-        # ✅ नेगेटिव प्रॉम्प्ट जोड़ा गया है ताकि इमेज ब्लर या अमूर्त न बने
         enhanced_prompt = p + ", ultra-realistic, highly detailed, sharp focus, 8k resolution, cinematic lighting, physical objects"
         
         payload = {
@@ -179,12 +179,12 @@ def generate_premium_videos(prompts):
         if not img_id:
             raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-        # 🟢 स्टेप 2: उस इमेज को असली वीडियो में बदलना
+        # 🟢 स्टेप 2: उस इमेज को असली वीडियो में बदलना (Validation Error फिक्स किया गया)
         print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (New Video AI)...")
         m_payload = {
             "imageId": img_id, 
             "imageType": "GENERATED",
-            "prompt": enhanced_prompt
+            "prompt": enhanced_prompt  # ✅ प्रॉम्प्ट जोड़ दिया गया है ताकि क्रेडेंशियल एरर न आए
         }
         
         m_res = requests.post(motion_url, json=m_payload, headers=leo_headers)
@@ -237,7 +237,6 @@ def generate_premium_videos(prompts):
 
 # --- 6. डायनामिक बोल्ड कैप्शंस (✅ MASSIVE TEXT UPGRADE) ---
 def create_bold_yellow_caption(text, duration):
-    # कैनवास का साइज़ बढ़ा दिया है ताकि सबसे बड़े शब्द भी फिट आ जाएँ
     canvas_w, canvas_h = 1080, 800
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -251,21 +250,18 @@ def create_bold_yellow_caption(text, duration):
             pass
     
     try:
-        # ✅ फॉन्ट साइज़ 180 (Huge Text for Mobile Screens)
-        font = ImageFont.truetype(font_path, 180)
+        font = ImageFont.truetype(font_path, 180) # विशाल आकार मोबाइल स्क्रीन के लिए
     except:
         font = ImageFont.load_default()
         
-    # चौड़ाई बहुत कम कर दी ताकि टेक्स्ट एक लाइन में सिर्फ 1-2 शब्द ही रहे
     wrapped = textwrap.fill(text.upper(), width=9)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
     x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
     
-    # 1. तगड़ा 3D डार्क शैडो इफ़ेक्ट
+    # 3D डार्क शैडो और थिक बॉर्डर
     draw.multiline_text((x+10, y+10), wrapped, font=font, fill="black", align='center')
-    # 2. मेन टेक्स्ट थिक ब्लैक बॉर्डर (Stroke) के साथ
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=25, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
@@ -292,8 +288,7 @@ def compile_high_retention_video(video_files, captions, audio_path):
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
-            # ✅ कैप्शन को स्क्रीन के एकदम सेंटर (बीचों-बीच) में सेट किया है
-            txt_clip = txt_clip.set_position(('center', 'center'))
+            txt_clip = txt_clip.set_position(('center', 'center')) # स्क्रीन के बीचों-बीच फिक्स
             combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
         else:
             combined = final_looped
@@ -336,6 +331,7 @@ def upload_to_youtube(video_file, title, description, tags):
     print(f"🎉 वीडियो लाइव! ID: {video_id}")
     return f"https://youtu.be/{video_id}"
 
+# --- 9. मुख्य इंजन एक्जीक्यूशन ---
 if __name__ == "__main__":
     try:
         print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE 👑")
@@ -356,7 +352,7 @@ if __name__ == "__main__":
         report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅
         
 🎬 <b>Title:</b> {title}
-🔗 <b>YouTube Link:</b> <a href='{video_url}'>यहाँ क्लिक करके देखें</a>
+🔗 <b>YouTube Link:</b> {video_url}
 
 📊 <b>सिस्टम और API स्टेटस:</b>
 - {ram_status}
@@ -371,12 +367,12 @@ if __name__ == "__main__":
         
     except Exception as e:
         ram_crash_status = check_ram_usage()
-        error_details = str(e)
+        error_details = str(traceback.format_exc()) # डीप एरर कैचिंग
         
         crash_msg = f"""🚨 <b>मशीन क्रैश हो गई (वीडियो अपलोड नहीं हुआ)</b> 🚨
         
 ❌ <b>समस्या (इसे ठीक करें):</b> 
-{error_details}
+{error_details[:300]}...
 
 💻 <b>क्रैश के समय सर्वर का स्टेटस:</b>
 - {ram_crash_status}
