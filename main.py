@@ -87,15 +87,15 @@ def check_leonardo_credits():
 def get_viral_content():
     print("🧠 GPT-4o से एकदम हाई-क्वालिटी वायरल स्क्रिप्ट लिखी जा रही है...")
     master_prompt = """
-    Write a HYPER-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, highly obscure historical or space mystery in Hindi.
+    Write a HYPER-VIRAL, high-retention 45-50 second YouTube Short script about a RARE, highly obscure historical or space mystery in Hindi (e.g., Wow! Signal, ancient megastructures).
     
     CRITICAL RULES FOR HIGH QUALITY:
     1. AVOID CLICHÉS: DO NOT use generic phrases. Provide SPECIFIC, deep, and mind-blowing facts (e.g., specific names, dates, exact events).
     2. HOOK: First 3 seconds MUST be a direct, shocking question or brutal pattern interrupt to stop the scroll.
     3. PACING: Exactly 110-120 words in Hindi for a fast-paced delivery.
     4. CTA: Only say "ऐसे ही रहस्यों के लिए सब्सक्राइब करें।"
-    5. PROMPTS (Crucial): Provide 6 ultra-detailed Midjourney-v6 style image prompts. Describe EXACT objects, close-ups, action, and lighting. NO generic space clouds. Example: "Close up of an ancient stone manuscript glowing with blue radio waves inside a dark cave, cinematic, 8k".
-    6. CAPTIONS (Crucial): Provide 6 SHORT, punchy captions. STRICTLY 1 to 3 words MAX per caption (e.g., "अनसुलझा रहस्य!", "क्या ये एलियंस थे?").
+    5. PROMPTS (Crucial): Provide 6 ultra-detailed Midjourney-v6 style image prompts. Describe EXACT PHYSICAL OBJECTS (e.g., "A huge old radio telescope dish standing in Ohio at night, glowing blue radio waves, highly detailed, sharp focus, 8k"). NO abstract art, NO blurry space clouds.
+    6. CAPTIONS (Crucial): Caption 1 MUST be a massive hook like "सबसे बड़ा रहस्य!". Keep ALL captions STRICTLY 1 to 3 words MAX so they appear huge on screen.
     
     Return ONLY valid JSON format:
     {
@@ -104,7 +104,7 @@ def get_viral_content():
       "tags": ["mystery", "space", "viral", "unheard story", "education"],
       "script": "Complete Hindi script...",
       "captions": ["PUNCHY WORD 1", "PUNCHY WORD 2", "PUNCHY WORD 3", "PUNCHY WORD 4", "PUNCHY WORD 5", "PUNCHY WORD 6"],
-      "prompts": ["Specific visual 1", "Specific visual 2", "Specific visual 3", "Specific visual 4", "Specific visual 5", "Specific visual 6"]
+      "prompts": ["Specific physical visual 1", "Specific physical visual 2", "Specific physical visual 3", "Specific physical visual 4", "Specific physical visual 5", "Specific physical visual 6"]
     }
     """
     response = client.chat.completions.create(
@@ -149,13 +149,14 @@ def generate_premium_videos(prompts):
         
         # 🟢 स्टेप 1: 9:16 साइज़ में 8K शार्प बेस इमेज बनाना
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} की 8K बेस इमेज बन रही है...")
-        # ✅ प्रॉम्प्ट में हाई-क्वालिटी कमांड्स जोड़ दिए गए हैं ताकि इमेज ब्लर न हो
-        enhanced_prompt = p + ", extremely detailed, 8k resolution, sharp focus, masterpiece, photorealistic, intricate details"
+        # ✅ नेगेटिव प्रॉम्प्ट जोड़ा गया है ताकि इमेज ब्लर या अमूर्त न बने
+        enhanced_prompt = p + ", ultra-realistic, highly detailed, sharp focus, 8k resolution, cinematic lighting, physical objects"
         
         payload = {
             "height": 1024, 
             "width": 576, 
             "prompt": enhanced_prompt, 
+            "negative_prompt": "blurry, abstract, out of focus, deformed, text, watermark, generic clouds",
             "num_images": 1
         }
         res = requests.post(leo_url, json=payload, headers=leo_headers)
@@ -236,8 +237,8 @@ def generate_premium_videos(prompts):
 
 # --- 6. डायनामिक बोल्ड कैप्शंस (✅ MASSIVE TEXT UPGRADE) ---
 def create_bold_yellow_caption(text, duration):
-    # कैनवास का साइज़ बढ़ा दिया है ताकि बड़े शब्द कटें नहीं
-    canvas_w, canvas_h = 1080, 600
+    # कैनवास का साइज़ बढ़ा दिया है ताकि सबसे बड़े शब्द भी फिट आ जाएँ
+    canvas_w, canvas_h = 1080, 800
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
@@ -250,22 +251,22 @@ def create_bold_yellow_caption(text, duration):
             pass
     
     try:
-        # फॉन्ट का साइज़ 140 से बढ़ाकर 160 कर दिया (Huge Text)
-        font = ImageFont.truetype(font_path, 160)
+        # ✅ फॉन्ट साइज़ 180 (Huge Text for Mobile Screens)
+        font = ImageFont.truetype(font_path, 180)
     except:
         font = ImageFont.load_default()
         
-    # चौड़ाई कम कर दी ताकि टेक्स्ट एक लाइन में 1-2 शब्द ही रहे और बड़ा दिखे
-    wrapped = textwrap.fill(text.upper(), width=10)
+    # चौड़ाई बहुत कम कर दी ताकि टेक्स्ट एक लाइन में सिर्फ 1-2 शब्द ही रहे
+    wrapped = textwrap.fill(text.upper(), width=9)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
     x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
     
-    # 1. 3D शैडो इफ़ेक्ट (ताकि टेक्स्ट बैकग्राउंड से अलग दिखे)
-    draw.multiline_text((x+8, y+8), wrapped, font=font, fill="black", align='center')
-    # 2. मेन टेक्स्ट थिक ब्लैक बॉर्डर के साथ
-    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=22, stroke_fill="black", align='center')
+    # 1. तगड़ा 3D डार्क शैडो इफ़ेक्ट
+    draw.multiline_text((x+10, y+10), wrapped, font=font, fill="black", align='center')
+    # 2. मेन टेक्स्ट थिक ब्लैक बॉर्डर (Stroke) के साथ
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=25, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
@@ -291,8 +292,8 @@ def compile_high_retention_video(video_files, captions, audio_path):
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
-            # कैप्शन को स्क्रीन के सेंटर-लोअर में फिक्स किया है (सबसे बेहतरीन जगह)
-            txt_clip = txt_clip.set_position(('center', 0.65), relative=True)
+            # ✅ कैप्शन को स्क्रीन के एकदम सेंटर (बीचों-बीच) में सेट किया है
+            txt_clip = txt_clip.set_position(('center', 'center'))
             combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
         else:
             combined = final_looped
@@ -362,7 +363,7 @@ if __name__ == "__main__":
 - {elevenlabs_status}
 - {leonardo_status}
 - टोकन उपयोग (GPT-4o): {gpt_tokens}
-- क्वालिटी: 100% Real Leonardo Video API + Massive Captions
+- क्वालिटी: 100% Real Leonardo Video API + MASSIVE CAPTIONS
 - अपलोड स्टेटस: सफलता"""
         
         send_telegram_report(report_msg)
