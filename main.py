@@ -21,7 +21,7 @@ if not hasattr(Image, 'ANTIALIAS'):
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 from moviepy.video.fx.all import loop 
 
-# --- 1. प्रीमियम API क्रेडेंशियल्स (सीधे GitHub Secrets से ऑटो-लोड) ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
@@ -32,7 +32,6 @@ LEONARDO_KEY = os.environ.get("LEONARDO_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# सुरक्षा जांच: अगर कोई चाबी गायब होगी तो मशीन यही रुक जाएगी
 if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, LEONARDO_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है! कृपया GitHub Secrets चेक करें।")
     sys.exit(1)
@@ -59,31 +58,6 @@ def check_ram_usage():
     except:
         return "सर्वर रैम (RAM): डेटा उपलब्ध नहीं"
 
-def check_elevenlabs_credits():
-    try:
-        url = "https://api.elevenlabs.io/v1/user/subscription"
-        headers = {"xi-api-key": ELEVEN_KEY}
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            remain = data['character_limit'] - data['character_count']
-            return f"ElevenLabs: {remain} कैरेक्टर्स बाकी"
-        return "ElevenLabs: क्रेडिट अनुपलब्ध"
-    except: 
-        return "ElevenLabs: चेक विफल"
-
-def check_leonardo_credits():
-    try:
-        url = "https://cloud.leonardo.ai/api/rest/v1/me"
-        headers = {"accept": "application/json", "authorization": f"Bearer {LEONARDO_KEY}"}
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            remain = res.json().get('user_details', [{}])[0].get('api_credit_volume', 'N/A')
-            return f"Leonardo: {remain} टोकन्स बाकी"
-        return "Leonardo: क्रेडिट अनुपलब्ध"
-    except: 
-        return "Leonardo: चेक विफल"
-
 # --- 3. सुपर वायरल स्क्रिप्ट जनरेशन (GPT-4o) ---
 def get_viral_content():
     print("🧠 GPT-4o से एकदम हाई-क्वालिटी वायरल स्क्रिप्ट लिखी जा रही है...")
@@ -95,7 +69,7 @@ def get_viral_content():
     2. HOOK: First 3 seconds MUST be a direct, shocking question or brutal pattern interrupt to stop the scroll.
     3. PACING: Exactly 110-120 words in Hindi for a fast-paced delivery.
     4. CTA: Only say "ऐसे ही रहस्यों के लिए सब्सक्राइब करें।"
-    5. PROMPTS (Crucial): Provide 6 ultra-detailed Midjourney-v6 style image prompts. Describe EXACT PHYSICAL OBJECTS (e.g., "A huge old radio telescope dish standing in Ohio at night, glowing blue radio waves, highly detailed, sharp focus, 8k"). NO abstract art, NO blurry space clouds.
+    5. PROMPTS (Crucial): Provide 6 ultra-detailed Midjourney-v6 style image prompts. Describe EXACT PHYSICAL OBJECTS. NO abstract art, NO blurry space clouds.
     6. CAPTIONS (Crucial): Caption 1 MUST be a massive hook like "सबसे बड़ा रहस्य!". Keep ALL captions STRICTLY 1 to 3 words MAX so they appear huge on screen.
     
     Return ONLY valid JSON format:
@@ -148,7 +122,7 @@ def generate_premium_videos(prompts):
     for i, p in enumerate(prompts):
         vname = f"clip_{i}.mp4" 
         
-        # 🟢 स्टेप 1: 9:16 साइज़ में 8K शार्प बेस इमेज बनाना
+        # 🟢 स्टेप 1: बेस इमेज बनाना
         print(f"\n🎨 [लियोनार्डो] दृश्य {i+1} की 8K बेस इमेज बन रही है...")
         enhanced_prompt = p + ", ultra-realistic, highly detailed, sharp focus, 8k resolution, cinematic lighting, physical objects"
         
@@ -161,6 +135,7 @@ def generate_premium_videos(prompts):
         }
         res = requests.post(leo_url, json=payload, headers=leo_headers)
         if res.status_code != 200:
+            print(f"\n🛑 LEONARDO IMAGE ERROR: {res.text}\n")
             raise Exception(f"Leonardo Image API एरर: {res.text}")
             
         gen_id = res.json()["sdGenerationJob"]["generationId"]
@@ -179,16 +154,17 @@ def generate_premium_videos(prompts):
         if not img_id:
             raise Exception("Leonardo टाइमआउट - इमेज नहीं बनी")
 
-        # 🟢 स्टेप 2: उस इमेज को असली वीडियो में बदलना (Validation Error फिक्स किया गया)
+        # 🟢 स्टेप 2: वीडियो में बदलना (DEEP ERROR CATCHING ADDED)
         print(f"🎬 [लियोनार्डो मोशन] इमेज में जान डाली जा रही है (New Video AI)...")
         m_payload = {
             "imageId": img_id, 
             "imageType": "GENERATED",
-            "prompt": enhanced_prompt  # ✅ प्रॉम्प्ट जोड़ दिया गया है ताकि क्रेडेंशियल एरर न आए
+            "prompt": enhanced_prompt  
         }
         
         m_res = requests.post(motion_url, json=m_payload, headers=leo_headers)
         if m_res.status_code != 200:
+            print(f"\n🚨🚨 LEONARDO MOTION REJECTED (गिटहब में एरर): {m_res.text} 🚨🚨\n")
             raise Exception(f"Leonardo Video API एरर: {m_res.text}")
             
         res_json = m_res.json()
@@ -219,7 +195,6 @@ def generate_premium_videos(prompts):
         if not vid_url:
             raise Exception("Leonardo Video टाइमआउट - वीडियो रेंडर नहीं हुआ या MP4 URL नहीं मिला।")
 
-        # 🟢 स्टेप 3: असली .mp4 वीडियो डाउनलोड करना
         print(f"📥 असली मोशन वीडियो डाउनलोड किया जा रहा है...")
         vid_res = requests.get(vid_url, stream=True)
         if vid_res.status_code == 200:
@@ -235,7 +210,7 @@ def generate_premium_videos(prompts):
             
     return video_clips
 
-# --- 6. डायनामिक बोल्ड कैप्शंस (✅ MASSIVE TEXT UPGRADE) ---
+# --- 6. डायनामिक बोल्ड कैप्शंस ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 800
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -250,7 +225,7 @@ def create_bold_yellow_caption(text, duration):
             pass
     
     try:
-        font = ImageFont.truetype(font_path, 180) # विशाल आकार मोबाइल स्क्रीन के लिए
+        font = ImageFont.truetype(font_path, 180) 
     except:
         font = ImageFont.load_default()
         
@@ -259,8 +234,6 @@ def create_bold_yellow_caption(text, duration):
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
     x, y = (canvas_w - text_w) // 2, (canvas_h - text_h) // 2
-    
-    # 3D डार्क शैडो और थिक बॉर्डर
     draw.multiline_text((x+10, y+10), wrapped, font=font, fill="black", align='center')
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=25, stroke_fill="black", align='center')
     
@@ -268,7 +241,7 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग (Real Video Compiler) ---
+# --- 7. हाई-रिटेंशन रेंडरिंग ---
 def compile_high_retention_video(video_files, captions, audio_path):
     print("🎞️ असली मोशन वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
@@ -288,7 +261,7 @@ def compile_high_retention_video(video_files, captions, audio_path):
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_bold_yellow_caption(cap_text, final_looped.duration)
-            txt_clip = txt_clip.set_position(('center', 'center')) # स्क्रीन के बीचों-बीच फिक्स
+            txt_clip = txt_clip.set_position(('center', 'center')) 
             combined = CompositeVideoClip([final_looped, txt_clip], size=(1080, 1920))
         else:
             combined = final_looped
@@ -335,7 +308,6 @@ def upload_to_youtube(video_file, title, description, tags):
 if __name__ == "__main__":
     try:
         print("👑 TITAN VIRAL PRODUCTION ENGINE ONLINE 👑")
-        
         title, description, tags, script, prompts, captions, gpt_tokens = get_viral_content()
         audio_path = generate_premium_audio(script)
         video_files = generate_premium_videos(prompts) 
@@ -345,40 +317,25 @@ if __name__ == "__main__":
         final_desc = f"{description}\n\n🌟 और अधिक गहराई से जानने के लिए विजिट करें:\n🔗 {gumroad_link}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
-        elevenlabs_status = check_elevenlabs_credits()
-        leonardo_status = check_leonardo_credits()
         ram_status = check_ram_usage()
-        
-        report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅
-        
-🎬 <b>Title:</b> {title}
-🔗 <b>YouTube Link:</b> {video_url}
-
-📊 <b>सिस्टम और API स्टेटस:</b>
-- {ram_status}
-- {elevenlabs_status}
-- {leonardo_status}
-- टोकन उपयोग (GPT-4o): {gpt_tokens}
-- क्वालिटी: 100% Real Leonardo Video API + MASSIVE CAPTIONS
-- अपलोड स्टेटस: सफलता"""
-        
+        report_msg = f"""✅ <b>प्रीमियम वायरल वीडियो अपलोड हो गया!</b> ✅\n🎬 Title: {title}\n🔗 Link: {video_url}\n📊 {ram_status}"""
         send_telegram_report(report_msg)
         print("✅ रिपोर्ट टेलीग्राम पर भेज दी गई है।")
         
     except Exception as e:
-        ram_crash_status = check_ram_usage()
-        error_details = str(traceback.format_exc()) # डीप एरर कैचिंग
+        error_details = str(traceback.format_exc())
         
-        crash_msg = f"""🚨 <b>मशीन क्रैश हो गई (वीडियो अपलोड नहीं हुआ)</b> 🚨
+        # 🚨 टेलीग्राम को बायपास करके गिटहब में एरर छापना 🚨
+        print("\n" + "="*60)
+        print("🚨🚨🚨 मशीन क्रैश हो गई! असली एरर नीचे है 🚨🚨🚨")
+        print(error_details)
+        print("="*60 + "\n")
         
-❌ <b>समस्या (इसे ठीक करें):</b> 
-{error_details[:300]}...
-
-💻 <b>क्रैश के समय सर्वर का स्टेटस:</b>
-- {ram_crash_status}
-
-(यह गड़बड़ी API या कोडिंग की हो सकती है। ऊपर दी गई समस्या को सीटीओ (मुझे) भेजें।)"""
+        # फिर भी बैकअप के लिए टेलीग्राम पर भेजने की कोशिश करेगा
+        try:
+            crash_msg = f"🚨 मशीन क्रैश 🚨\n❌ समस्या:\n{str(e)[:300]}..."
+            send_telegram_report(crash_msg)
+        except:
+            pass
         
-        send_telegram_report(crash_msg)
-        print(f"❌ इंजन क्रैश हो गया। डिटेल टेलीग्राम पर भेज दी गई है।")
         sys.exit(1)
