@@ -32,7 +32,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है! (Leonardo अब नहीं चाहिए)")
+    print("❌ एरर: कोई प्रीमियम चाबी या टेलीग्राम टोकन गायब है!")
     sys.exit(1)
 
 client = OpenAI(api_key=OPENAI_KEY)
@@ -107,29 +107,35 @@ def generate_premium_audio(script):
         f.write(res.content)
     return audio_path
 
-# --- 5. 100% FREE हॉलीवुड-ग्रेड विजुअल्स (Pollinations AI) ---
+# --- 5. 100% FREE हॉलीवुड-ग्रेड विजुअल्स (Pollinations AI Fixes 403) ---
 def generate_free_visuals(prompts):
     image_files = []
-    print("\n🎨 [100% FREE AI] हाई-क्वालिटी 8K इमेजेस जनरेट हो रही हैं (बिना किसी लिमिट के)...")
+    print("\n🎨 [100% FREE AI] हाई-क्वालिटी 8K इमेजेस जनरेट हो रही हैं (403 बाईपास के साथ)...")
     
     for i, p in enumerate(prompts):
         img_name = f"scene_{i}.jpg" 
-        
-        # प्रॉम्प्ट को शानदार बनाने के लिए कुछ कीवर्ड्स जोड़े गए हैं
         enhanced_prompt = p + ", ultra-realistic, highly detailed, sharp focus, cinematic lighting, 8k resolution, trending on artstation"
         safe_prompt = urllib.parse.quote(enhanced_prompt)
-        
-        # Pollinations AI URL (कोई API Key नहीं चाहिए, एकदम फ्री!)
         url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
         
         print(f"📥 दृश्य {i+1} डाउनलोड किया जा रहा है...")
-        urllib.request.urlretrieve(url, img_name)
+        
+        # ✅ यहाँ 403 FORBIDDEN का पक्का इलाज (User-Agent जोड़ा गया है)
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        )
+        
+        with urllib.request.urlopen(req) as response, open(img_name, 'wb') as out_file:
+            out_file.write(response.read())
+            
         image_files.append(img_name)
         print(f"✅ दृश्य {i+1} सफलता से सेव हो गया!")
+        time.sleep(2) # सर्वर पर लोड कम करने के लिए छोटा सा गैप
             
     return image_files
 
-# --- 6. डायनामिक बोल्ड कैप्शंस (MASSIVE UPGRADE) ---
+# --- 6. डायनामिक बोल्ड कैप्शंस ---
 def create_bold_yellow_caption(text, duration):
     canvas_w, canvas_h = 1080, 800
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -157,7 +163,7 @@ def create_bold_yellow_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. हाई-रिटेंशन रेंडरिंग (बिना क्रैश के) ---
+# --- 7. हाई-रिटेंशन रेंडरिंग ---
 def compile_high_retention_video(image_files, captions, audio_path):
     print("🎞️ असली वायरल वीडियो रेंडर किया जा रहा है...")
     audio = AudioFileClip(audio_path)
@@ -167,7 +173,6 @@ def compile_high_retention_video(image_files, captions, audio_path):
     processed_clips = []
     
     for idx, img_file in enumerate(image_files):
-        # ImageClip का उपयोग सर्वर की RAM बचाता है (VideoClip के मुकाबले)
         base_clip = ImageClip(img_file).set_duration(clip_duration).resize(newsize=(1080, 1920))
         
         cap_text = captions[idx % len(captions)]
