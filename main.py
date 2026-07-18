@@ -65,7 +65,6 @@ def clean_low_performing_videos():
             published_at_str = item['snippet']['publishedAt'].replace('Z', '+00:00')
             published_at = datetime.fromisoformat(published_at_str)
             
-            # अगर वीडियो 7 दिन से ज्यादा पुराना है
             if published_at < seven_days_ago:
                 stats_req = youtube.videos().list(part="statistics", id=video_id)
                 stats_res = stats_req.execute()
@@ -129,7 +128,7 @@ def generate_free_visuals(prompts):
         time.sleep(1)
     return image_files
 
-# --- 4. 💥 विशाल कैप्शंस (बहुत बड़े) ---
+# --- 4. 💥 विशाल कैप्शंस (404 Error Fixed) ---
 def create_huge_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -137,9 +136,20 @@ def create_huge_caption(text, duration):
     
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
-        urllib.request.urlretrieve("https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto-Black.ttf", font_path)
+        try:
+            # नया वर्किंग लिंक (Google Fonts OFL Repo)
+            url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Black.ttf"
+            urllib.request.urlretrieve(url, font_path)
+        except:
+            try:
+                # अगर पहला फेल हो जाए, तो बैकअप लिंक
+                backup_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf"
+                urllib.request.urlretrieve(backup_url, font_path)
+            except Exception as e:
+                print(f"⚠️ फॉन्ट डाउनलोड एरर: {e}")
+                pass
     
-    try: font = ImageFont.truetype(font_path, 150) # 👈 फॉन्ट साइज़ 150 कर दिया है (विशाल)
+    try: font = ImageFont.truetype(font_path, 150) # 👈 विशाल फॉन्ट
     except: font = ImageFont.load_default()
         
     wrapped = textwrap.fill(text.upper(), width=10)
@@ -147,7 +157,6 @@ def create_huge_caption(text, duration):
     x = (canvas_w - (bbox[2] - bbox[0])) // 2
     y = (canvas_h - (bbox[3] - bbox[1])) // 2
     
-    # थिक स्ट्रोक ताकि साफ़ दिखे
     draw.multiline_text((x+5, y+5), wrapped, font=font, fill="black", align='center')
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=20, stroke_fill="black", align='center')
     
@@ -155,7 +164,7 @@ def create_huge_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 5. हिल-चाल (Motion/Ken Burns Effect) और ब्लैक स्क्रीन फिक्स ---
+# --- 5. हिल-चाल (Ken Burns Effect) और ब्लैक स्क्रीन फिक्स ---
 def compile_viral_video(image_files, captions, audio_path):
     print("🎞️ वीडियो कंपाइल और मोशन इफेक्ट्स चालू (हिल-चाल के साथ)...")
     audio = AudioFileClip(audio_path)
@@ -164,15 +173,15 @@ def compile_viral_video(image_files, captions, audio_path):
     processed_clips = []
     
     for idx, img_file in enumerate(image_files):
-        # 🔄 ज़ूम/पैन इफेक्ट (Ken Burns Effect) - अब फोटो वीडियो की तरह हिलेगी
+        # 🔄 ज़ूम/पैन इफेक्ट - फोटो वीडियो की तरह हिलेगी
         base_clip = ImageClip(img_file).set_duration(clip_duration)
-        base_clip = base_clip.resize(lambda t: 1 + 0.08 * (t / clip_duration)) # 👈 8% तक धीरे-धीरे ज़ूम होगा
+        base_clip = base_clip.resize(lambda t: 1 + 0.08 * (t / clip_duration)) 
         base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
         
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_huge_caption(cap_text, clip_duration)
-            txt_clip = txt_clip.set_position(('center', 800)) # 👈 स्क्रीन के बीचों-बीच
+            txt_clip = txt_clip.set_position(('center', 800)) 
             combined = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920))
         else:
             combined = base_clip
@@ -181,7 +190,7 @@ def compile_viral_video(image_files, captions, audio_path):
         
     final_video = concatenate_videoclips(processed_clips, method="compose")
     
-    # 🛑 ब्लैक स्क्रीन फिक्स: ऑडियो और वीडियो की लेंथ एकदम बराबर लॉक की है
+    # 🛑 ब्लैक स्क्रीन फिक्स
     final_video = final_video.set_audio(audio).set_duration(audio_duration)
     
     output_name = "final_viral_production.mp4"
@@ -206,16 +215,13 @@ if __name__ == "__main__":
     try:
         print("👑 TITAN AUTOMATION ENGINE 3.0 ONLINE 👑")
         
-        # 1. पहले कचरा साफ करेगा (फ्लॉप वीडियो ऑटो-डिलीट)
         clean_low_performing_videos()
         
-        # 2. नया वायरल वीडियो बनाएगा
         title, description, tags, script, prompts, captions = get_viral_content()
         audio_path = generate_premium_audio(script)
         image_files = generate_free_visuals(prompts) 
         final_output = compile_viral_video(image_files, captions, audio_path)
         
-        # 3. यूट्यूब पर डालेगा
         gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
         final_desc = f"{description}\n\n🌟 और अधिक गहराई से जानने के लिए विजिट करें:\n🔗 {gumroad_link}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
