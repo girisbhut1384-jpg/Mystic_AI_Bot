@@ -45,7 +45,7 @@ def send_telegram_report(message):
     try: requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"})
     except: pass
 
-# --- 2. 🤖 ऑटो-डिलीट सिस्टम (7 दिन पुराने, < 100 व्यूज वाले फ्लॉप वीडियो) ---
+# --- 2. 🤖 ऑटो-डिलीट सिस्टम ---
 def clean_low_performing_videos():
     print("🧹 पुराने फ्लॉप वीडियो को स्कैन करके डिलीट किया जा रहा है...")
     try:
@@ -72,15 +72,12 @@ def clean_low_performing_videos():
                 if stats_res.get('items'):
                     views = int(stats_res['items'][0]['statistics'].get('viewCount', 0))
                     if views < 100:
-                        print(f"🗑️ डिलीट कर रहे हैं वीडियो ID: {video_id} (Views: {views})")
                         youtube.videos().delete(id=video_id).execute()
                         deleted_count += 1
                         time.sleep(1)
                         
         if deleted_count > 0:
             send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो डिलीट किए गए।")
-        else:
-            print("✅ चैनल एकदम क्लीन है, कोई फ्लॉप वीडियो नहीं मिला।")
     except Exception as e:
         print(f"⚠️ क्लीनअप एरर: {str(e)}")
 
@@ -120,15 +117,14 @@ def generate_free_visuals(prompts):
         img_name = f"scene_{i}.jpg"
         safe_prompt = urllib.parse.quote(p + ", 8k resolution, cinematic lighting, dramatic masterpiece")
         url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response, open(img_name, 'wb') as out_file:
             out_file.write(response.read())
         image_files.append(img_name)
-        print(f"✅ दृश्य {i+1} सेव हो गया!")
         time.sleep(1)
     return image_files
 
-# --- 4. 💥 विशाल कैप्शंस (404 Error Fixed) ---
+# --- 4. 💥 विशाल कैप्शंस ---
 def create_huge_caption(text, duration):
     canvas_w, canvas_h = 1080, 400
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -137,19 +133,12 @@ def create_huge_caption(text, duration):
     font_path = "Roboto-Black.ttf"
     if not os.path.exists(font_path):
         try:
-            # नया वर्किंग लिंक (Google Fonts OFL Repo)
             url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Black.ttf"
             urllib.request.urlretrieve(url, font_path)
         except:
-            try:
-                # अगर पहला फेल हो जाए, तो बैकअप लिंक
-                backup_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf"
-                urllib.request.urlretrieve(backup_url, font_path)
-            except Exception as e:
-                print(f"⚠️ फॉन्ट डाउनलोड एरर: {e}")
-                pass
+            pass
     
-    try: font = ImageFont.truetype(font_path, 150) # 👈 विशाल फॉन्ट
+    try: font = ImageFont.truetype(font_path, 150)
     except: font = ImageFont.load_default()
         
     wrapped = textwrap.fill(text.upper(), width=10)
@@ -164,7 +153,7 @@ def create_huge_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 5. हिल-चाल (Ken Burns Effect) और ब्लैक स्क्रीन फिक्स ---
+# --- 5. हिल-चाल और ब्लैक स्क्रीन फिक्स ---
 def compile_viral_video(image_files, captions, audio_path):
     print("🎞️ वीडियो कंपाइल और मोशन इफेक्ट्स चालू (हिल-चाल के साथ)...")
     audio = AudioFileClip(audio_path)
@@ -173,7 +162,6 @@ def compile_viral_video(image_files, captions, audio_path):
     processed_clips = []
     
     for idx, img_file in enumerate(image_files):
-        # 🔄 ज़ूम/पैन इफेक्ट - फोटो वीडियो की तरह हिलेगी
         base_clip = ImageClip(img_file).set_duration(clip_duration)
         base_clip = base_clip.resize(lambda t: 1 + 0.08 * (t / clip_duration)) 
         base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
@@ -189,8 +177,6 @@ def compile_viral_video(image_files, captions, audio_path):
         processed_clips.append(combined)
         
     final_video = concatenate_videoclips(processed_clips, method="compose")
-    
-    # 🛑 ब्लैक स्क्रीन फिक्स
     final_video = final_video.set_audio(audio).set_duration(audio_duration)
     
     output_name = "final_viral_production.mp4"
@@ -200,7 +186,7 @@ def compile_viral_video(image_files, captions, audio_path):
     final_video.close()
     return output_name
 
-# --- 6. यूट्यूब अपलोड ---
+# --- 6. यूट्यूब अपलोड (💪 इंटरनेट ड्रॉप सेफ्टी के साथ) ---
 def upload_to_youtube(video_file, title, description, tags):
     print("📤 YouTube पर लाइव किया जा रहा है...")
     request_body = {
@@ -208,7 +194,23 @@ def upload_to_youtube(video_file, title, description, tags):
         "status": {"privacyStatus": "public", "madeForKids": False}
     }
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
-    response = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
+    request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
+    
+    # इंटरनेट टूटने पर 5 बार दोबारा कोशिश करने का सेफ्टी नेट (RETRY SYSTEM)
+    response = None
+    retry_count = 0
+    while response is None and retry_count < 5:
+        try:
+            print(f"अटेम्प्ट {retry_count + 1}/5...")
+            response = request.execute()
+        except Exception as e:
+            print(f"⚠️ नेटवर्क एरर! 5 सेकंड बाद दोबारा कोशिश कर रहे हैं... ({e})")
+            retry_count += 1
+            time.sleep(5)
+            
+    if response is None:
+        raise Exception("5 बार कोशिश करने के बाद भी अपलोड फेल हो गया।")
+        
     return f"https://youtu.be/{response.get('id')}"
 
 if __name__ == "__main__":
