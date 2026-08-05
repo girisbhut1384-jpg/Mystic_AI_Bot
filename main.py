@@ -22,7 +22,7 @@ if not hasattr(Image, 'ANTIALIAS'):
 
 from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip, vfx
 
-# --- 1. प्रीमियम API क्रेडेंशियल्स (HuggingFace हटा दिया गया है) ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
@@ -119,7 +119,7 @@ def generate_premium_audio(script):
     with open("voice.mp3", "wb") as f: f.write(res.content)
     return "voice.mp3"
 
-# --- 4. 100% फ्री विजुअल्स ---
+# --- 4. 100% फ्री विजुअल्स (💥 500 Error Retry Armor Added) ---
 def generate_free_visuals(prompts):
     image_files = []
     print("\n🎨 [100% FREE AI] इमेजेस जनरेट हो रही हैं...")
@@ -129,12 +129,25 @@ def generate_free_visuals(prompts):
         safe_prompt = urllib.parse.quote(p + ", 8k resolution, cinematic, photorealistic")
         url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response, open(img_name, 'wb') as out_file:
-            out_file.write(response.read())
+        
+        # 🛡️ नया सुरक्षा कवच: अगर AI 500 एरर दे, तो 5 बार दोबारा कोशिश करेगा
+        success = False
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response, open(img_name, 'wb') as out_file:
+                    out_file.write(response.read())
+                success = True
+                break # फोटो बन गई, लूप से बाहर आ जाओ
+            except Exception as e:
+                print(f"⚠️ सर्वर बिजी है (Error: {e})। कोशिश {attempt + 1}/5... 5 सेकंड रुकें...")
+                time.sleep(5)
+                
+        if not success:
+            raise Exception("फ्री AI सर्वर 5 कोशिशों के बाद भी डाउन है। बाद में प्रयास करें।")
         
         image_files.append(img_name)
         print(f"✅ दृश्य {i+1} तैयार।")
-        time.sleep(1)
+        time.sleep(2) # सर्वर को सांस लेने का समय दें
             
     return image_files
 
@@ -144,13 +157,12 @@ def create_hindi_caption(text, duration):
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # यह नया फॉन्ट 'Yantramanav' हिंदी को सपोर्ट करता है, इससे डब्बे (Boxes) नहीं बनेंगे
     font_path = "Yantramanav-Black.ttf"
     if not os.path.exists(font_path):
         try:
             font_url = "https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf"
             req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+            with urllib.request.urlopen(req, timeout=30) as response, open(font_path, 'wb') as out_file:
                 out_file.write(response.read())
         except Exception as e:
             pass
@@ -179,7 +191,7 @@ def compile_viral_video(image_files, captions, audio_path):
     processed_clips = []
     
     for idx, file_path in enumerate(image_files):
-        # शानदार वीडियो इफ़ेक्ट के लिए 15% डीप ज़ूम
+        # 15% डीप ज़ूम मोशन
         base_clip = ImageClip(file_path).set_duration(clip_duration)
         base_clip = base_clip.resize(lambda t: 1 + 0.15 * (t / clip_duration)) 
         base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
@@ -187,7 +199,7 @@ def compile_viral_video(image_files, captions, audio_path):
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
             txt_clip = create_hindi_caption(cap_text, clip_duration)
-            txt_clip = txt_clip.set_position(('center', 1250)) # टेक्स्ट सुरक्षित रूप से नीचे
+            txt_clip = txt_clip.set_position(('center', 1250))
             combined = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920))
         else:
             combined = base_clip
