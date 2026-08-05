@@ -6,7 +6,6 @@ import random
 import textwrap
 import json
 import urllib.request
-import urllib.parse
 import traceback
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
@@ -20,7 +19,7 @@ if not hasattr(Image, 'Resampling'):
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
-from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip, vfx
+from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
 
 # --- 1. प्रीमियम API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -80,7 +79,7 @@ def clean_low_performing_videos():
     except Exception as e:
         pass
 
-# --- 3. वायरल स्क्रिप्ट जनरेशन (हर बार नई कहानी) ---
+# --- 3. वायरल स्क्रिप्ट जनरेशन ---
 def get_viral_content():
     print("🧠 GPT-4o से बिल्कुल नई स्क्रिप्ट लिखी जा रही है...")
     topics = [
@@ -96,7 +95,7 @@ def get_viral_content():
     
     master_prompt = f"""
     Write a HYPER-VIRAL mystery script in Hindi (45-50 seconds) specifically about this exact topic: '{selected_topic}'.
-    Make it completely unique. DO NOT use the Wow Signal or any previously generated scripts.
+    Make it completely unique. DO NOT use previously generated scripts.
     
     CRITICAL RULES FOR SCRIPT:
     1. ONLY write the exact words the narrator will speak. NO stage directions, brackets, or actor names.
@@ -119,39 +118,33 @@ def generate_premium_audio(script):
     with open("voice.mp3", "wb") as f: f.write(res.content)
     return "voice.mp3"
 
-# --- 4. 100% फ्री विजुअल्स (💥 500 Error Retry Armor Added) ---
-def generate_free_visuals(prompts):
+# --- 4. 💥 परमानेंट इमेज इंजन (OpenAI DALL-E 3) 💥 ---
+def generate_permanent_visuals(prompts):
     image_files = []
-    print("\n🎨 [100% FREE AI] इमेजेस जनरेट हो रही हैं...")
+    print("\n🎨 [PERMANENT FIX] OpenAI (DALL-E 3) से 100% गारंटीड इमेजेस बन रही हैं...")
     
     for i, p in enumerate(prompts):
-        img_name = f"scene_{i}.jpg"
-        safe_prompt = urllib.parse.quote(p + ", 8k resolution, cinematic, photorealistic")
-        url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        img_name = f"scene_{i}.png"
+        print(f"📥 दृश्य {i+1} जनरेट हो रहा है (बिना किसी लूप या इंतज़ार के)...")
         
-        # 🛡️ नया सुरक्षा कवच: अगर AI 500 एरर दे, तो 5 बार दोबारा कोशिश करेगा
-        success = False
-        for attempt in range(5):
-            try:
-                with urllib.request.urlopen(req, timeout=30) as response, open(img_name, 'wb') as out_file:
-                    out_file.write(response.read())
-                success = True
-                break # फोटो बन गई, लूप से बाहर आ जाओ
-            except Exception as e:
-                print(f"⚠️ सर्वर बिजी है (Error: {e})। कोशिश {attempt + 1}/5... 5 सेकंड रुकें...")
-                time.sleep(5)
-                
-        if not success:
-            raise Exception("फ्री AI सर्वर 5 कोशिशों के बाद भी डाउन है। बाद में प्रयास करें।")
+        # सीधे आपके OpenAI Key का इस्तेमाल करके बिना रुके इमेज जनरेट
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=p + ", cinematic lighting, hyper-realistic, 8k masterpiece",
+            size="1024x1792", # एकदम परफेक्ट YouTube Shorts साइज
+            quality="standard",
+            n=1,
+        )
+        
+        image_url = response.data[0].url
+        urllib.request.urlretrieve(image_url, img_name)
         
         image_files.append(img_name)
-        print(f"✅ दृश्य {i+1} तैयार।")
-        time.sleep(2) # सर्वर को सांस लेने का समय दें
+        print(f"✅ दृश्य {i+1} एकदम परफेक्ट तैयार!")
             
     return image_files
 
-# --- 5. 💥 स्पेशल देवनागरी हिंदी फॉन्ट (डब्बे फिक्स) ---
+# --- 5. 💥 देवनागरी हिंदी फॉन्ट ---
 def create_hindi_caption(text, duration):
     canvas_w, canvas_h = 1080, 500
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -161,9 +154,9 @@ def create_hindi_caption(text, duration):
     if not os.path.exists(font_path):
         try:
             font_url = "https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf"
-            req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=30) as response, open(font_path, 'wb') as out_file:
-                out_file.write(response.read())
+            res = requests.get(font_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+            with open(font_path, 'wb') as out_file:
+                out_file.write(res.content)
         except Exception as e:
             pass
     
@@ -182,7 +175,7 @@ def create_hindi_caption(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 6. रेंडरिंग (15% मोशन ज़ूम इफ़ेक्ट के साथ) ---
+# --- 6. रेंडरिंग (15% मोशन ज़ूम इफ़ेक्ट) ---
 def compile_viral_video(image_files, captions, audio_path):
     print("🎞️ फाइनल वायरल वीडियो तैयार किया जा रहा है...")
     audio = AudioFileClip(audio_path)
@@ -191,7 +184,6 @@ def compile_viral_video(image_files, captions, audio_path):
     processed_clips = []
     
     for idx, file_path in enumerate(image_files):
-        # 15% डीप ज़ूम मोशन
         base_clip = ImageClip(file_path).set_duration(clip_duration)
         base_clip = base_clip.resize(lambda t: 1 + 0.15 * (t / clip_duration)) 
         base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
@@ -226,29 +218,20 @@ def upload_to_youtube(video_file, title, description, tags):
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
     request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
     
-    response = None
-    for retry in range(5):
-        try:
-            response = request.execute()
-            break
-        except Exception as e:
-            time.sleep(5)
-            
-    if response is None:
-        raise Exception("अपलोड फेल हो गया।")
-        
+    response = request.execute()
     return f"https://youtu.be/{response.get('id')}"
 
 if __name__ == "__main__":
     try:
-        print("👑 TITAN AUTOMATION ENGINE (100% FREE AI & HINDI FIX) ONLINE 👑")
+        print("👑 TITAN AUTOMATION ENGINE (THE PERMANENT FIX) ONLINE 👑")
         
         clean_low_performing_videos()
         
         title, description, tags, script, prompts, captions = get_viral_content()
         audio_path = generate_premium_audio(script)
         
-        image_files = generate_free_visuals(prompts) 
+        # 👈 नया परमानेंट इमेज इंजन
+        image_files = generate_permanent_visuals(prompts) 
         
         final_output = compile_viral_video(image_files, captions, audio_path)
         
@@ -256,7 +239,7 @@ if __name__ == "__main__":
         final_desc = f"{description}\n\n🌟 और अधिक गहराई से जानने के लिए विजिट करें:\n🔗 {gumroad_link}"
         video_url = upload_to_youtube(final_output, title, final_desc, tags)
         
-        send_telegram_report(f"✅ <b>नया वीडियो लाइव!</b>\n🎬 Title: {title}\n🔗 Link: {video_url}")
+        send_telegram_report(f"✅ <b>नया वीडियो लाइव! (परमानेंट फिक्स के साथ)</b>\n🎬 Title: {title}\n🔗 Link: {video_url}")
         print(f"🎉 वीडियो लाइव! ID: {video_url}")
         
     except Exception as e:
