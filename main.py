@@ -15,26 +15,24 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from PIL import Image, ImageDraw, ImageFont
 
-# PIL Resampling Fix
 if not hasattr(Image, 'Resampling'):
     Image.Resampling = getattr(Image, 'LANCZOS', 1)
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
-from moviepy.editor import AudioFileClip, VideoFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip
+from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, ImageClip, vfx
 
-# --- 1. प्रीमियम API क्रेडेंशियल्स ---
+# --- 1. प्रीमियम API क्रेडेंशियल्स (HuggingFace हटा दिया गया है) ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
-HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN") # 👈 असली फ्री वीडियो के लिए नया टोकन
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, HF_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    print("❌ एरर: कोई सीक्रेट की (Key) गायब है! (HUGGINGFACE_TOKEN चेक करें)")
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, OPENAI_KEY, ELEVEN_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+    print("❌ एरर: कोई मुख्य सीक्रेट की (Key) गायब है! (GitHub Secrets चेक करें)")
     sys.exit(1)
 
 client = OpenAI(api_key=OPENAI_KEY)
@@ -82,28 +80,26 @@ def clean_low_performing_videos():
     except Exception as e:
         pass
 
-# --- 3. वायरल स्क्रिप्ट जनरेशन (💥 हर बार नई कहानी) ---
+# --- 3. वायरल स्क्रिप्ट जनरेशन (हर बार नई कहानी) ---
 def get_viral_content():
     print("🧠 GPT-4o से बिल्कुल नई स्क्रिप्ट लिखी जा रही है...")
-    
-    # 👈 रैंडम टॉपिक जनरेटर ताकि वीडियो कभी रिपीट न हो
     topics = [
-        "Deep Ocean Unexplained Mysteries", 
-        "Ancient Lost Technologies", 
-        "Creepy Space Voids and Black Holes", 
-        "Unsolved Historical Disappearances", 
-        "Bizarre Scientific Discoveries on Earth",
-        "Secret Underground Civilizations"
+        "महासागर के अनसुलझे रहस्य", 
+        "प्राचीन विलुप्त तकनीकें", 
+        "अंतरिक्ष के डरावने ब्लैक होल", 
+        "इतिहास के अनसुलझे गायब होने के रहस्य", 
+        "धरती की अजीबोगरीब वैज्ञानिक खोजें",
+        "रहस्यमयी भूमिगत सभ्यताएं"
     ]
     selected_topic = random.choice(topics)
     print(f"🎯 आज का नया टॉपिक: {selected_topic}")
     
     master_prompt = f"""
     Write a HYPER-VIRAL mystery script in Hindi (45-50 seconds) specifically about this exact topic: '{selected_topic}'.
-    Make it completely unique. DO NOT use the Wow Signal.
+    Make it completely unique. DO NOT use the Wow Signal or any previously generated scripts.
     
     CRITICAL RULES FOR SCRIPT:
-    1. ONLY write the exact words the narrator will speak. NO stage directions.
+    1. ONLY write the exact words the narrator will speak. NO stage directions, brackets, or actor names.
     2. Ensure Hindi is engaging, mysterious, and fast-paced.
     
     Return ONLY JSON format:
@@ -116,67 +112,39 @@ def get_viral_content():
     return parsed["title"], parsed["description"], parsed["tags"], parsed["script"], parsed["prompts"][:6], parsed["captions"][:6]
 
 def generate_premium_audio(script):
+    print("🎙️ ElevenLabs से सस्पेंस वॉइसओवर बन रहा है...")
     url = f"https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM"
     headers = {"xi-api-key": ELEVEN_KEY, "Content-Type": "application/json"}
     res = requests.post(url, json={"text": script, "model_id": "eleven_multilingual_v2"}, headers=headers)
     with open("voice.mp3", "wb") as f: f.write(res.content)
     return "voice.mp3"
 
-# --- 4. असली फ्री वीडियो AI (Hugging Face SVD) ---
-def generate_free_real_videos(prompts):
-    video_files = []
-    print("\n🎨 [100% FREE AI] पहले फोटो बन रही है, फिर उसे असली वीडियो में बदला जाएगा...")
-    
-    hf_api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-video-diffusion-img2vid-xt"
-    hf_headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+# --- 4. 100% फ्री विजुअल्स ---
+def generate_free_visuals(prompts):
+    image_files = []
+    print("\n🎨 [100% FREE AI] इमेजेस जनरेट हो रही हैं...")
     
     for i, p in enumerate(prompts):
         img_name = f"scene_{i}.jpg"
-        vid_name = f"scene_video_{i}.mp4"
-        
-        # 1. Pollinations से शानदार फोटो डाउनलोड करें
         safe_prompt = urllib.parse.quote(p + ", 8k resolution, cinematic, photorealistic")
         url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response, open(img_name, 'wb') as out_file:
             out_file.write(response.read())
-            
-        print(f"📥 दृश्य {i+1} की फोटो तैयार। अब असली वीडियो बन रहा है (इसमें समय लग सकता है)...")
         
-        # 2. Hugging Face से फोटो को असली वीडियो में बदलें (Image-to-Video)
-        with open(img_name, "rb") as f:
-            img_data = f.read()
+        image_files.append(img_name)
+        print(f"✅ दृश्य {i+1} तैयार।")
+        time.sleep(1)
             
-        success = False
-        for attempt in range(4): # HF फ्री API कभी-कभी लोड होने में समय लेती है
-            res = requests.post(hf_api_url, headers=hf_headers, data=img_data)
-            if res.status_code == 200:
-                with open(vid_name, "wb") as f:
-                    f.write(res.content)
-                video_files.append(vid_name)
-                print(f"✅ दृश्य {i+1} का असली AI वीडियो बन गया!")
-                success = True
-                break
-            elif "loading" in res.text.lower():
-                print("⏳ AI सर्वर वार्म-अप हो रहा है, 20 सेकंड रुकें...")
-                time.sleep(20)
-            else:
-                time.sleep(10)
-                
-        # अगर फ्री API बहुत ज्यादा बिजी हो (बैकअप सिस्टम ताकि मशीन क्रैश न हो)
-        if not success:
-            print(f"⚠️ फ्री वीडियो AI ओवरलोड है। इस क्लिप के लिए स्मार्ट मोशन बैकअप का उपयोग कर रहे हैं...")
-            video_files.append(img_name) 
-            
-    return video_files
+    return image_files
 
-# --- 5. 💥 स्पेशल हिंदी फॉन्ट और सही साइज (डब्बे फिक्स) ---
+# --- 5. 💥 स्पेशल देवनागरी हिंदी फॉन्ट (डब्बे फिक्स) ---
 def create_hindi_caption(text, duration):
     canvas_w, canvas_h = 1080, 500
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # 👈 नया हिंदी (देवनागरी) सपोर्टेड फॉन्ट ताकि डब्बे न बनें
+    # यह नया फॉन्ट 'Yantramanav' हिंदी को सपोर्ट करता है, इससे डब्बे (Boxes) नहीं बनेंगे
     font_path = "Yantramanav-Black.ttf"
     if not os.path.exists(font_path):
         try:
@@ -187,7 +155,6 @@ def create_hindi_caption(text, duration):
         except Exception as e:
             pass
     
-    # फॉन्ट का साइज़ 120 सेट किया है ताकि अक्षर बहुत बड़े भी रहें और स्क्रीन से बाहर भी न जाएं
     try: font = ImageFont.truetype(font_path, 120) 
     except: font = ImageFont.load_default()
         
@@ -197,35 +164,25 @@ def create_hindi_caption(text, duration):
     y = (canvas_h - (bbox[3] - bbox[1])) // 2
     
     draw.multiline_text((x+8, y+8), wrapped, font=font, fill="black", align='center')
-    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", align='center')
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=15, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 6. रेंडरिंग ---
-def compile_viral_video(media_files, captions, audio_path):
+# --- 6. रेंडरिंग (15% मोशन ज़ूम इफ़ेक्ट के साथ) ---
+def compile_viral_video(image_files, captions, audio_path):
     print("🎞️ फाइनल वायरल वीडियो तैयार किया जा रहा है...")
     audio = AudioFileClip(audio_path)
     audio_duration = audio.duration
-    clip_duration = audio_duration / len(media_files)
+    clip_duration = audio_duration / len(image_files)
     processed_clips = []
     
-    for idx, file_path in enumerate(media_files):
-        if file_path.endswith('.mp4'):
-            # अगर HF से असली वीडियो बना है
-            base_clip = VideoFileClip(file_path)
-            # वीडियो को क्लिप ड्यूरेशन के हिसाब से लूप या कट करें
-            if base_clip.duration < clip_duration:
-                base_clip = base_clip.fx(vfx.loop, duration=clip_duration)
-            else:
-                base_clip = base_clip.subclip(0, clip_duration)
-            base_clip = base_clip.resize(newsize=(1080, 1920))
-        else:
-            # बैकअप अगर API बिजी थी तो स्मार्ट मोशन इफ़ेक्ट
-            base_clip = ImageClip(file_path).set_duration(clip_duration)
-            base_clip = base_clip.resize(lambda t: 1 + 0.10 * (t / clip_duration)) 
-            base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
+    for idx, file_path in enumerate(image_files):
+        # शानदार वीडियो इफ़ेक्ट के लिए 15% डीप ज़ूम
+        base_clip = ImageClip(file_path).set_duration(clip_duration)
+        base_clip = base_clip.resize(lambda t: 1 + 0.15 * (t / clip_duration)) 
+        base_clip = base_clip.set_position(('center', 'center')).resize(newsize=(1080, 1920))
         
         cap_text = captions[idx % len(captions)]
         if cap_text.strip():
@@ -272,17 +229,16 @@ def upload_to_youtube(video_file, title, description, tags):
 
 if __name__ == "__main__":
     try:
-        print("👑 TITAN AUTOMATION ENGINE (REAL AI VIDEO & HINDI FIX) ONLINE 👑")
+        print("👑 TITAN AUTOMATION ENGINE (100% FREE AI & HINDI FIX) ONLINE 👑")
         
         clean_low_performing_videos()
         
         title, description, tags, script, prompts, captions = get_viral_content()
         audio_path = generate_premium_audio(script)
         
-        # 👈 नया असली वीडियो इंजन
-        media_files = generate_free_real_videos(prompts) 
+        image_files = generate_free_visuals(prompts) 
         
-        final_output = compile_viral_video(media_files, captions, audio_path)
+        final_output = compile_viral_video(image_files, captions, audio_path)
         
         gumroad_link = "https://girisbhut.gumroad.com/l/ajhzk"
         final_desc = f"{description}\n\n🌟 और अधिक गहराई से जानने के लिए विजिट करें:\n🔗 {gumroad_link}"
