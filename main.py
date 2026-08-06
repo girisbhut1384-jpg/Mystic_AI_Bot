@@ -8,7 +8,6 @@ import json
 import urllib.parse
 import traceback
 import asyncio
-import nest_asyncio
 from datetime import datetime, timedelta, timezone
 from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, ImageClip
 from PIL import Image, ImageDraw, ImageFont
@@ -17,8 +16,6 @@ import g4f
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
-nest_asyncio.apply()
 
 # --- 1. सभी API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -65,14 +62,12 @@ def clean_low_performing_videos():
             published_at_str = item['snippet']['publishedAt'].replace('Z', '+00:00')
             published_at = datetime.fromisoformat(published_at_str)
             
-            # सिर्फ 7 दिन से पुराने वीडियो चेक करेगा
             if published_at < seven_days_ago:
                 stats_req = youtube.videos().list(part="statistics", id=video_id)
                 stats_res = stats_req.execute()
                 
                 if stats_res.get('items'):
                     views = int(stats_res['items'][0]['statistics'].get('viewCount', 0))
-                    # अगर 100 से कम व्यूज हैं, तो उड़ा देगा
                     if views < 100:
                         youtube.videos().delete(id=video_id).execute()
                         deleted_count += 1
