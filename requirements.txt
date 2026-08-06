@@ -1,6 +1,9 @@
+requests
+moviepy==1.0.3
+Pillow
+edge-tts
+g4f
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-openai
-requests
-moviepy
+nest_asyncio
