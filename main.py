@@ -41,7 +41,6 @@ def send_telegram_report(message, is_error=False):
         payload["parse_mode"] = "HTML"
     try:
         res = requests.post(url, json=payload)
-        # अगर HTML की वजह से ब्लॉक हो, तो सादे टेक्स्ट में दोबारा भेजें
         if res.status_code != 200 and not is_error:
             del payload["parse_mode"]
             requests.post(url, json=payload)
@@ -53,24 +52,21 @@ def verify_all_systems():
     report = "🛠️ <b>सिस्टम हेल्थ रिपोर्ट:</b>\n\n"
     is_youtube_ok = False
     
-    # YouTube Token Check
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
         youtube = build("youtube", "v3", credentials=creds)
         youtube.channels().list(part="id", mine=True).execute()
         report += "✅ <b>YouTube:</b> कनेक्टेड है।\n"
         is_youtube_ok = True
-    except Exception as e:
-        report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है! Google Cloud से नया निकालें।\n"
+    except:
+        report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है!\n"
 
-    # Pexels Check
     try:
         pex_res = requests.get("https://api.pexels.com/videos/search?query=tech&per_page=1", headers={"Authorization": PEXELS_API_KEY}, timeout=10)
         if pex_res.status_code == 200: report += "✅ <b>Pexels:</b> काम कर रहा है।\n"
         else: report += f"🔴 <b>Pexels:</b> एरर {pex_res.status_code}\n"
     except: report += "❌ <b>Pexels:</b> डाउन है।\n"
 
-    # Pixabay Check
     try:
         pix_res = requests.get(f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q=tech&per_page=1", timeout=10)
         if pix_res.status_code == 200: report += "✅ <b>Pixabay:</b> काम कर रहा है।\n"
@@ -80,7 +76,7 @@ def verify_all_systems():
     send_telegram_report(report)
     return is_youtube_ok
 
-# --- 4. ऑटो-डिलीट सिस्टम (100 व्यू से कम वाले) ---
+# --- 4. ऑटो-डिलीट सिस्टम ---
 def clean_low_performing_videos():
     print("🧹 पुराने फ्लॉप वीडियो को स्कैन कर रहे हैं...", flush=True)
     try:
@@ -112,7 +108,7 @@ def clean_low_performing_videos():
     except Exception as e:
         print(f"⚠️ क्लीनअप एरर: {e}", flush=True)
 
-# --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन (No Crashes) ---
+# --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन (No KeyErrors anymore) ---
 FALLBACK_SCRIPTS = [
     {
         "title": "इंटरनेट का सबसे डरावना सच! 😱 #shorts",
@@ -120,29 +116,27 @@ FALLBACK_SCRIPTS = [
         "tags": ["mystery", "hacker", "tech", "shorts"],
         "script": "इंटरनेट की दुनिया जितनी साफ़ दिखती है, अंदर से उतनी ही खौफनाक है। जिसे हम इस्तेमाल करते हैं, वो सिर्फ 4 प्रतिशत है। बाकी 96 प्रतिशत डार्क वेब है, जहां ऐसे रहस्य छिपे हैं जो आपकी नींद उड़ा देंगे। ऐसे रहस्य जानने के लिए अभी सब्सक्राइब करें!",
         "captions": ["इंटरनेट का काला सच", "सिर्फ 4 प्रतिशत", "बाकी डार्क वेब", "नींद उड़ा देंगे", "अभी सब्सक्राइब करें"]
-    },
-    {
-        "title": "क्या हम ब्रह्मांड में अकेले हैं? 👽 #shorts",
-        "description": "अंतरिक्ष के अनसुलझे रहस्य! #space #aliens #mystery",
-        "tags": ["space", "mystery", "aliens", "shorts"],
-        "script": "इस अनंत ब्रह्मांड में खरबों तारे हैं, फिर भी वैज्ञानिक इतने हैरान क्यों हैं? क्योंकि कहीं से एक ऐसा रहस्यमयी सिग्नल आया है जिसे इंसान डिकोड नहीं कर पाए। क्या कोई हमें देख रहा है? सच जानने के लिए चैनल को अभी सब्सक्राइब करें!",
-        "captions": ["ब्रह्मांड का रहस्य", "वैज्ञानिक भी हैरान", "रहस्यमयी सिग्नल", "क्या कोई देख रहा है?", "अभी सब्सक्राइब करें"]
     }
 ]
 
 def get_viral_script():
     print("🧠 AI से नई कहानी लिखी जा रही है...", flush=True)
-    prompt = "Write a mystery tech script for 45-second YouTube Short. Hindi language. End with CTA. Return JSON keys: title, description, tags, script, captions (array of 5)."
+    prompt = "You are a JSON API. Generate a mystery tech script for a YouTube Short in Hindi. You MUST return ONLY a valid JSON object. DO NOT wrap in markdown. The JSON MUST have exactly these keys: 'title', 'description', 'tags', 'script', and 'captions'."
     
-    # 2 बार कोशिश करेगा
-    for _ in range(2):
+    for _ in range(3):
         try:
             url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}"
             response = requests.get(url, timeout=20)
             content = response.text.replace("```json", "").replace("```", "").strip()
+            
+            # अगर AI फालतू टेक्स्ट दे दे, तो सिर्फ JSON वाला हिस्सा निकालें
+            if "{" in content and "}" in content:
+                content = content[content.find("{"):content.rfind("}")+1]
+                
             data = json.loads(content)
-            # सख्त चेकिंग (ताकि KeyError न आए)
-            if "script" in data and "captions" in data and "title" in data:
+            
+            # यह चेक करेगा कि डेटा असल में डिक्शनरी है और उसमें 'script' मौजूद है
+            if isinstance(data, dict) and "script" in data and "captions" in data:
                 return data
         except:
             time.sleep(2)
@@ -150,7 +144,7 @@ def get_viral_script():
     print("⚠️ AI ने गलत जवाब दिया, सुपर-बैकअप स्क्रिप्ट इस्तेमाल कर रहे हैं...", flush=True)
     return random.choice(FALLBACK_SCRIPTS)
 
-# --- 6. आवाज़ और BGM (3x Retry Loop) ---
+# --- 6. आवाज़ और BGM ---
 async def generate_audio(text):
     print("🎙️ आवाज़ तैयार हो रही है...", flush=True)
     success = False
@@ -163,7 +157,7 @@ async def generate_audio(text):
         except:
             time.sleep(2)
             
-    if not success: raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
+    if not success: raise Exception("आवाज़ जनरेट नहीं हो पाई")
 
     main_audio = AudioFileClip("voice.mp3")
     if os.path.exists("bgm.mp3"):
@@ -176,7 +170,7 @@ async def generate_audio(text):
     return main_audio, main_audio.duration
 
 # --- 7. स्टॉक वीडियो फ़ेचर ---
-TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "digital network", "server room", "matrix code"]
+TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "server room", "matrix code"]
 
 def fetch_stock_video(duration):
     keyword = random.choice(TECH_KEYWORDS)
@@ -269,24 +263,30 @@ def upload_video(video_file, title, description, tags):
 
 if __name__ == "__main__":
     try:
-        # सबसे पहले चेक करेगा, अगर YouTube Token एक्सपायर है तो मशीन यहीं रुक जाएगी!
         if not verify_all_systems():
-            send_telegram_report("🚨 <b>मशीन बंद:</b> YouTube टोकन एक्सपायर हो गया है। वीडियो बनाने का कोई फायदा नहीं। कृपया नया टोकन अपडेट करें।", is_error=True)
+            send_telegram_report("🚨 <b>मशीन बंद:</b> YouTube टोकन एक्सपायर हो गया है। कृपया नया टोकन अपडेट करें।", is_error=True)
             sys.exit(1)
             
         clean_low_performing_videos()
         
         data = get_viral_script()
-        final_audio, audio_duration = asyncio.run(generate_audio(data["script"]))
-        final_video = compile_final_video(data["captions"], final_audio, audio_duration)
-        video_url = upload_video(final_video, data["title"], data["description"], data["tags"])
         
-        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव!</b>\n🎬 {data['title']}\n🔗 {video_url}")
+        # 🛡️ 1000% सेफ्टी लेयर: अगर AI अभी भी पागलपंती करे, तो बैकअप कहानी लगा देंगे ताकि KeyError ना आए
+        safe_script = data.get("script", FALLBACK_SCRIPTS[0]["script"])
+        safe_captions = data.get("captions", FALLBACK_SCRIPTS[0]["captions"])
+        safe_title = data.get("title", FALLBACK_SCRIPTS[0]["title"])
+        safe_desc = data.get("description", FALLBACK_SCRIPTS[0]["description"])
+        safe_tags = data.get("tags", FALLBACK_SCRIPTS[0]["tags"])
+        
+        final_audio, audio_duration = asyncio.run(generate_audio(safe_script))
+        final_video = compile_final_video(safe_captions, final_audio, audio_duration)
+        video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
+        
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव!</b>\n🎬 {safe_title}\n🔗 {video_url}")
         print("🎉 सफलता! वीडियो लाइव हो गया।", flush=True)
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        # is_error=True की वजह से अब एरर सादे टेक्स्ट में आएगा, Telegram ब्लॉक नहीं करेगा!
         send_telegram_report(f"🚨 मशीन क्रैश रिपोर्ट:\n\n{error_details[:800]}", is_error=True)
         print("❌ एरर आ गया, टेलीग्राम पर रिपोर्ट भेजी गई।", flush=True)
         sys.exit(1)
