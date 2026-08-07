@@ -20,14 +20,14 @@ from googleapiclient.http import MediaFileUpload
 # GitHub Actions में हिंदी टेक्स्ट को क्रैश होने से बचाने के लिए
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# --- 1. API क्रेडेंशियल्स ---
-CLIENT_ID = os.environ.get("CLIENT_ID")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
-PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
-PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+# --- 1. API क्रेडेंशियल्स (स्पेस की सफाई के साथ) ---
+CLIENT_ID = os.environ.get("CLIENT_ID", "").strip()
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "").strip()
+REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN", "").strip()
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "").strip()
+PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "").strip()
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
 if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, PIXABAY_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
@@ -108,7 +108,7 @@ def clean_low_performing_videos():
     except Exception as e:
         print(f"⚠️ क्लीनअप एरर: {e}", flush=True)
 
-# --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन (No KeyErrors anymore) ---
+# --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन ---
 FALLBACK_SCRIPTS = [
     {
         "title": "इंटरनेट का सबसे डरावना सच! 😱 #shorts",
@@ -116,6 +116,13 @@ FALLBACK_SCRIPTS = [
         "tags": ["mystery", "hacker", "tech", "shorts"],
         "script": "इंटरनेट की दुनिया जितनी साफ़ दिखती है, अंदर से उतनी ही खौफनाक है। जिसे हम इस्तेमाल करते हैं, वो सिर्फ 4 प्रतिशत है। बाकी 96 प्रतिशत डार्क वेब है, जहां ऐसे रहस्य छिपे हैं जो आपकी नींद उड़ा देंगे। ऐसे रहस्य जानने के लिए अभी सब्सक्राइब करें!",
         "captions": ["इंटरनेट का काला सच", "सिर्फ 4 प्रतिशत", "बाकी डार्क वेब", "नींद उड़ा देंगे", "अभी सब्सक्राइब करें"]
+    },
+    {
+        "title": "क्या हम ब्रह्मांड में अकेले हैं? 👽 #shorts",
+        "description": "अंतरिक्ष के अनसुलझे रहस्य! #space #aliens #mystery",
+        "tags": ["space", "mystery", "aliens", "shorts"],
+        "script": "इस अनंत ब्रह्मांड में खरबों तारे हैं, फिर भी वैज्ञानिक इतने हैरान क्यों हैं? क्योंकि कहीं से एक ऐसा रहस्यमयी सिग्नल आया है जिसे इंसान डिकोड नहीं कर पाए। क्या कोई हमें देख रहा है? सच जानने के लिए चैनल को अभी सब्सक्राइब करें!",
+        "captions": ["ब्रह्मांड का रहस्य", "वैज्ञानिक भी हैरान", "रहस्यमयी सिग्नल", "क्या कोई देख रहा है?", "अभी सब्सक्राइब करें"]
     }
 ]
 
@@ -129,13 +136,10 @@ def get_viral_script():
             response = requests.get(url, timeout=20)
             content = response.text.replace("```json", "").replace("```", "").strip()
             
-            # अगर AI फालतू टेक्स्ट दे दे, तो सिर्फ JSON वाला हिस्सा निकालें
             if "{" in content and "}" in content:
                 content = content[content.find("{"):content.rfind("}")+1]
                 
             data = json.loads(content)
-            
-            # यह चेक करेगा कि डेटा असल में डिक्शनरी है और उसमें 'script' मौजूद है
             if isinstance(data, dict) and "script" in data and "captions" in data:
                 return data
         except:
@@ -196,13 +200,21 @@ def fetch_stock_video(duration):
             temp_name = f"temp_{random.randint(1,9999)}.mp4"
             urllib.request.urlretrieve(video_url, temp_name)
             clip = VideoFileClip(temp_name).without_audio()
+            
+            # सुरक्षित लंबाई चेक (ताकि MoviePy क्रैश न हो)
+            if getattr(clip, 'duration', None) is None or clip.duration <= 0:
+                raise Exception("वीडियो क्लिप में लंबाई नहीं मिली")
+                
             if clip.duration > duration + 1:
                 start_time = random.uniform(0, clip.duration - duration - 1)
                 clip = clip.subclip(start_time, start_time + duration)
             else:
                 clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1)).subclip(0, duration)
-            return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920)
-        except: pass
+                
+            # यहाँ क्लिप की लंबाई को जबरदस्ती लॉक किया गया है
+            return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920).set_duration(duration)
+        except Exception as e: 
+            print(f"⚠️ वीडियो प्रोसेसिंग में एरर: {e}", flush=True)
 
     img = Image.new('RGB', (1080, 1920), color=(15, 25, 45))
     img.save("safe_fallback.jpg")
@@ -231,9 +243,10 @@ def create_subtitle_clip(text, duration):
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
+    # सबटाइटल की लंबाई को लॉक किया गया है
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 9. वीडियो कंपाइलेशन ---
+# --- 9. वीडियो कंपाइलेशन (Duration Locks) ---
 def compile_final_video(captions, final_audio, audio_duration):
     print("🎞️ फाइनल वीडियो जोड़ा जा रहा है...", flush=True)
     total_duration = audio_duration + 2.0 
@@ -243,7 +256,10 @@ def compile_final_video(captions, final_audio, audio_duration):
     for cap_text in captions:
         base_clip = fetch_stock_video(clip_duration)
         if cap_text.strip():
-            processed_clips.append(CompositeVideoClip([base_clip, create_subtitle_clip(cap_text, clip_duration)], size=(1080, 1920)))
+            txt_clip = create_subtitle_clip(cap_text, clip_duration)
+            # CompositeVideoClip को भी सख्ती से लॉक कर दिया गया है
+            comp = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920)).set_duration(clip_duration)
+            processed_clips.append(comp)
         else:
             processed_clips.append(base_clip)
             
@@ -271,7 +287,6 @@ if __name__ == "__main__":
         
         data = get_viral_script()
         
-        # 🛡️ 1000% सेफ्टी लेयर: अगर AI अभी भी पागलपंती करे, तो बैकअप कहानी लगा देंगे ताकि KeyError ना आए
         safe_script = data.get("script", FALLBACK_SCRIPTS[0]["script"])
         safe_captions = data.get("captions", FALLBACK_SCRIPTS[0]["captions"])
         safe_title = data.get("title", FALLBACK_SCRIPTS[0]["title"])
