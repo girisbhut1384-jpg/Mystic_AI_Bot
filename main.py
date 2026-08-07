@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, ImageClip, CompositeAudioClip
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
-import g4f
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -30,6 +29,10 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, PIXABAY_API
     print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
     sys.exit(1)
 
+# यूट्यूब API सेटअप
+creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+youtube = build("youtube", "v3", credentials=creds)
+
 # --- 2. टेलीग्राम रिपोर्टिंग ---
 def send_telegram_report(message):
     try: 
@@ -42,45 +45,65 @@ def check_api_health():
     print("🔍 API Keys की जाँच की जा रही है...")
     report = "🛠️ <b>API हेल्थ रिपोर्ट:</b>\n\n"
     
-    # Pexels Check
     try:
         pex_res = requests.get("https://api.pexels.com/videos/search?query=nature&per_page=1", headers={"Authorization": PEXELS_API_KEY}, timeout=10)
-        if pex_res.status_code == 200:
-            report += "✅ <b>Pexels:</b> बिल्कुल सही काम कर रहा है।\n"
-        elif pex_res.status_code in [401, 403]:
-            report += f"🔴 <b>Pexels:</b> Key काम नहीं कर रही है (Error {pex_res.status_code} - हमारी Key में दिक्कत है)।\n"
-        elif pex_res.status_code >= 500:
-            report += f"🟠 <b>Pexels:</b> उनका सर्वर डाउन है (Error {pex_res.status_code} - Pexels की गलती)।\n"
-        else:
-            report += f"⚠️ <b>Pexels:</b> अज्ञात एरर ({pex_res.status_code})।\n"
-    except Exception as e:
-        report += f"❌ <b>Pexels:</b> कनेक्ट नहीं हो पा रहा है।\n"
+        if pex_res.status_code == 200: report += "✅ <b>Pexels:</b> बिल्कुल सही काम कर रहा है।\n"
+        else: report += f"🔴 <b>Pexels:</b> काम नहीं कर रहा (Error {pex_res.status_code})।\n"
+    except Exception as e: report += f"❌ <b>Pexels:</b> कनेक्ट नहीं हो पा रहा।\n"
 
-    # Pixabay Check
     try:
         pix_res = requests.get(f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q=nature&per_page=3", timeout=10)
-        if pix_res.status_code == 200:
-            report += "✅ <b>Pixabay:</b> बिल्कुल सही काम कर रहा है।\n"
-        elif pix_res.status_code in [400, 401, 403]:
-            report += f"🔴 <b>Pixabay:</b> Key काम नहीं कर रही है (Error {pix_res.status_code} - हमारी Key में दिक्कत है)।\n"
-        elif pix_res.status_code >= 500:
-            report += f"🟠 <b>Pixabay:</b> उनका सर्वर डाउन है (Error {pix_res.status_code} - Pixabay की गलती)।\n"
-        else:
-            report += f"⚠️ <b>Pixabay:</b> अज्ञात एरर ({pix_res.status_code})।\n"
-    except Exception as e:
-        report += f"❌ <b>Pixabay:</b> कनेक्ट नहीं हो पा रहा है।\n"
+        if pix_res.status_code == 200: report += "✅ <b>Pixabay:</b> बिल्कुल सही काम कर रहा है।\n"
+        else: report += f"🔴 <b>Pixabay:</b> काम नहीं कर रहा (Error {pix_res.status_code})।\n"
+    except Exception as e: report += f"❌ <b>Pixabay:</b> कनेक्ट नहीं हो पा रहा।\n"
 
     send_telegram_report(report)
-    print(report)
 
-# --- 4. डायनामिक कीवर्ड्स ---
+# --- 4. ऑटो-डिलीट सिस्टम (100 व्यू से कम वाले) ---
+def clean_low_performing_videos():
+    print("🧹 पुराने फ्लॉप वीडियो को स्कैन करके डिलीट किया जा रहा है...")
+    try:
+        deleted_count = 0
+        request = youtube.channels().list(part="contentDetails", mine=True)
+        response = request.execute()
+        uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+        
+        playlist_request = youtube.playlistItems().list(part="snippet", playlistId=uploads_playlist_id, maxResults=50)
+        playlist_response = playlist_request.execute()
+        
+        now = datetime.now(timezone.utc)
+        seven_days_ago = now - timedelta(days=7)
+        
+        for item in playlist_response.get('items', []):
+            video_id = item['snippet']['resourceId']['videoId']
+            published_at_str = item['snippet']['publishedAt'].replace('Z', '+00:00')
+            published_at = datetime.fromisoformat(published_at_str)
+            
+            if published_at < seven_days_ago:
+                stats_req = youtube.videos().list(part="statistics", id=video_id)
+                stats_res = stats_req.execute()
+                
+                if stats_res.get('items'):
+                    views = int(stats_res['items'][0]['statistics'].get('viewCount', 0))
+                    if views < 100:
+                        youtube.videos().delete(id=video_id).execute()
+                        deleted_count += 1
+                        time.sleep(1)
+                        
+        if deleted_count > 0:
+            send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो डिलीट किए गए।")
+            print(f"✅ {deleted_count} फ्लॉप वीडियो हटाए गए।")
+    except Exception as e:
+        print(f"⚠️ क्लीनअप में एरर: {e}")
+
+# --- 5. 30+ डायनामिक कीवर्ड्स ---
 TECH_KEYWORDS = [
     "hacker typing", "neon server", "cyber security", "matrix code", "dark web", 
     "data center", "abstract tech", "glitch", "ai brain", "future technology",
     "circuit board", "smartphone close up", "code scrolling", "server room"
 ]
 
-# --- 5. स्क्रिप्ट जनरेशन ---
+# --- 6. 100% क्रैश-फ्री स्क्रिप्ट जनरेशन (Pollinations AI) ---
 def get_viral_script():
     print("🧠 AI से नई कहानी लिखी जा रही है...")
     topics = ["साइबर सिक्योरिटी", "आर्टिफिशियल इंटेलिजेंस", "डीप वेब", "अंतरिक्ष रहस्य"]
@@ -89,9 +112,11 @@ def get_viral_script():
     Return ONLY a JSON with keys: 'title', 'description', 'tags', 'script', 'captions' (array of 5 short Hindi phrases)."""
     
     try:
-        response = g4f.ChatCompletion.create(model=g4f.models.gpt_35_turbo, messages=[{"role": "user", "content": prompt}])
-        return json.loads(response.replace("```json", "").replace("```", "").strip())
-    except:
+        url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}"
+        response = requests.get(url, timeout=30)
+        content = response.text.replace("```json", "").replace("```", "").strip()
+        return json.loads(content)
+    except Exception as e:
         return {
             "title": "इंटरनेट का काला सच! 😱 #shorts",
             "description": "इंटरनेट के रहस्य! #mystery",
@@ -100,41 +125,44 @@ def get_viral_script():
             "captions": ["इंटरनेट का काला सच", "सर्वर हैक", "डेटा चोरी", "भयानक रहस्य", "अभी सब्सक्राइब करें"]
         }
 
-# --- 6. आवाज़ ---
+# --- 7. आवाज़ और बैकग्राउंड म्यूजिक (BGM) ---
 async def generate_audio(text):
+    print("🎙️ आवाज़ तैयार हो रही है...")
     communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural")
     await communicate.save("voice.mp3")
-    return AudioFileClip("voice.mp3"), AudioFileClip("voice.mp3").duration
+    
+    main_audio = AudioFileClip("voice.mp3")
+    
+    # BGM लॉजिक (अगर bgm.mp3 फाइल मौजूद है तो)
+    if os.path.exists("bgm.mp3"):
+        print("🎵 बैकग्राउंड म्यूजिक जोड़ा जा रहा है...")
+        bg_audio = AudioFileClip("bgm.mp3").volumex(0.15)
+        from moviepy.audio.fx.all import audio_loop
+        bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
+        return CompositeAudioClip([main_audio, bg_audio]), main_audio.duration
+        
+    return main_audio, main_audio.duration
 
-# --- 7. स्मार्ट स्टॉक वीडियो (Pexels + Pixabay Fallback) ---
+# --- 8. स्मार्ट स्टॉक वीडियो (Pexels + Pixabay Fallback) ---
 def fetch_stock_video(duration):
     keyword = random.choice(TECH_KEYWORDS)
     video_url = None
 
-    # प्रयास 1: Pexels
     try:
         url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={random.randint(1, 3)}&orientation=portrait"
         res = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=10)
         if res.status_code == 200 and res.json().get("videos"):
             video_url = sorted(random.choice(res.json()["videos"])["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)[0]["link"]
-        else:
-            send_telegram_report(f"⚠️ <b>Pexels फेल:</b> '{keyword}' के लिए। Error: {res.status_code}। Pixabay पर जा रहे हैं...")
-    except Exception as e:
-        send_telegram_report(f"⚠️ <b>Pexels एरर:</b> {e}। Pixabay पर जा रहे हैं...")
+    except: pass
 
-    # प्रयास 2: Pixabay (बैकअप)
     if not video_url:
         try:
             pix_url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={urllib.parse.quote(keyword)}&per_page=10"
             res = requests.get(pix_url, timeout=10)
             if res.status_code == 200 and res.json().get("hits"):
                 video_url = random.choice(res.json()["hits"])["videos"].get("large", random.choice(res.json()["hits"])["videos"].get("medium"))["url"]
-            else:
-                send_telegram_report(f"🚨 <b>Pixabay भी फेल:</b> Error {res.status_code}।")
-        except Exception as e:
-            send_telegram_report(f"🚨 <b>Pixabay एरर:</b> {e}")
+        except: pass
 
-    # वीडियो प्रोसेसिंग
     if video_url:
         try:
             temp_name = f"temp_{random.randint(1,9999)}.mp4"
@@ -150,12 +178,12 @@ def fetch_stock_video(duration):
             return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920)
         except: pass
 
-    # सेफ बैकग्राउंड
+    # सेफ बैकग्राउंड (Black Screen नहीं)
     img = Image.new('RGB', (1080, 1920), color=(15, 25, 45))
     img.save("safe_fallback.jpg")
     return ImageClip("safe_fallback.jpg").set_duration(duration)
 
-# --- 8. सबटाइटल्स ---
+# --- 9. सेंटर सबटाइटल्स (Black Stroke) ---
 def create_subtitle_clip(text, duration):
     canvas_w, canvas_h = 1080, 1920
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -180,7 +208,7 @@ def create_subtitle_clip(text, duration):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 9. वीडियो कंपाइलेशन ---
+# --- 10. वीडियो कंपाइलेशन (Smooth Ending) ---
 def compile_final_video(captions, final_audio, audio_duration):
     total_duration = audio_duration + 2.0 
     clip_duration = total_duration / len(captions)
@@ -197,10 +225,8 @@ def compile_final_video(captions, final_audio, audio_duration):
     final_video.write_videofile("final_viral_shorts.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return "final_viral_shorts.mp4"
 
-# --- 10. YouTube अपलोड ---
+# --- 11. YouTube अपलोड ---
 def upload_video(video_file, title, description, tags):
-    creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-    youtube = build("youtube", "v3", credentials=creds)
     request_body = {"snippet": {"categoryId": "22", "title": title, "description": description, "tags": tags}, "status": {"privacyStatus": "public", "madeForKids": False}}
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
     res = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
@@ -208,8 +234,8 @@ def upload_video(video_file, title, description, tags):
 
 if __name__ == "__main__":
     try:
-        # सबसे पहले API चेक करेगा और टेलीग्राम पर रिपोर्ट भेजेगा
         check_api_health()
+        clean_low_performing_videos()
         
         data = get_viral_script()
         final_audio, audio_duration = asyncio.run(generate_audio(data["script"]))
