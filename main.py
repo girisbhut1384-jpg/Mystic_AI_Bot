@@ -9,7 +9,7 @@ import urllib.parse
 import traceback
 import asyncio
 from datetime import datetime, timedelta, timezone
-from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, ImageClip
+from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, ImageClip, CompositeAudioClip
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
 import g4f
@@ -17,236 +17,207 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. सभी API क्रेडेंशियल्स ---
+# --- 1. API क्रेडेंशियल्स ---
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN")
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
-PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, PIXABAY_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    print("❌ एरर: GitHub Secrets में कोई API Key या Telegram टोकन गायब है!")
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+    print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
     sys.exit(1)
 
-# यूट्यूब API सेटअप
-creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-youtube = build("youtube", "v3", credentials=creds)
+# --- 2. 30+ डायनामिक कीवर्ड्स (Keyword Rotation) ---
+TECH_KEYWORDS = [
+    "hacker typing", "neon server", "cyber security", "matrix code", "dark web", 
+    "data center", "abstract tech", "glitch", "ai brain", "future technology",
+    "circuit board", "smartphone close up", "code scrolling", "server room", 
+    "digital network", "hacking", "cyberpunk city", "neon lights", "binary code",
+    "artificial intelligence", "robot face", "hologram", "data transfer", 
+    "virtual reality", "satellite space", "mysterious tech", "computer virus",
+    "fingerprint scan", "digital eye", "tech background", "motherboard", "fiber optics"
+]
 
-# --- 2. टेलीग्राम रिपोर्टिंग सिस्टम ---
-def send_telegram_report(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    try: 
-        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"})
-    except: 
-        pass
-
-# --- 3. ऑटो-डिलीट सिस्टम (100 व्यू से कम वाले) ---
-def clean_low_performing_videos():
-    print("🧹 पुराने फ्लॉप वीडियो को स्कैन करके डिलीट किया जा रहा है...")
-    try:
-        deleted_count = 0
-        request = youtube.channels().list(part="contentDetails", mine=True)
-        response = request.execute()
-        uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-        
-        playlist_request = youtube.playlistItems().list(part="snippet", playlistId=uploads_playlist_id, maxResults=50)
-        playlist_response = playlist_request.execute()
-        
-        now = datetime.now(timezone.utc)
-        seven_days_ago = now - timedelta(days=7)
-        
-        for item in playlist_response.get('items', []):
-            video_id = item['snippet']['resourceId']['videoId']
-            published_at_str = item['snippet']['publishedAt'].replace('Z', '+00:00')
-            published_at = datetime.fromisoformat(published_at_str)
-            
-            if published_at < seven_days_ago:
-                stats_req = youtube.videos().list(part="statistics", id=video_id)
-                stats_res = stats_req.execute()
-                
-                if stats_res.get('items'):
-                    views = int(stats_res['items'][0]['statistics'].get('viewCount', 0))
-                    if views < 100:
-                        youtube.videos().delete(id=video_id).execute()
-                        deleted_count += 1
-                        time.sleep(1)
-                        
-        if deleted_count > 0:
-            send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो डिलीट किए गए।")
-            print(f"✅ {deleted_count} फ्लॉप वीडियो हटाए गए।")
-    except Exception as e:
-        print(f"⚠️ क्लीनअप में एरर: {e}")
-
-# --- 4. स्क्रिप्ट और कीवर्ड जनरेशन ---
+# --- 3. स्क्रिप्ट जनरेशन (Smooth Ending & CTA) ---
 def get_viral_script():
-    print("🧠 फ्री AI से नई कहानी और सर्च कीवर्ड्स लिखे जा रहे हैं...")
-    topics = ["साइबर सिक्योरिटी", "आर्टिफिशियल इंटेलिजेंस का भविष्य", "डीप वेब के रहस्य", "अंतरिक्ष के अनसुलझे रहस्य", "भविष्य की तकनीक"]
-    selected_topic = random.choice(topics)
+    print("🧠 AI से नई कहानी और CTA लिखी जा रही है...")
+    topics = ["साइबर सिक्योरिटी", "आर्टिफिशियल इंटेलिजेंस", "डीप वेब", "अंतरिक्ष रहस्य", "भविष्य की तकनीक"]
     
-    prompt = f"Write a mystery tech script about '{selected_topic}' for a 45-second YouTube Short. Hindi language. Return ONLY a JSON with keys: 'title', 'description', 'tags', 'script' (Hindi narration only), 'captions' (array of 5 short Hindi phrases), 'keywords' (array of 5 English ONE OR TWO WORD search terms for stock video websites, like 'hacker', 'matrix', 'space', 'technology')."
+    prompt = f"""Write a mystery tech script about '{random.choice(topics)}' for a 45-second YouTube Short. Hindi language. 
+    IMPORTANT: The script MUST end with a strong Call to Action (CTA) like 'सब्सक्राइब करें' or 'लाइक करें'.
+    Return ONLY a JSON with keys: 
+    'title', 'description', 'tags', 
+    'script' (Hindi narration with CTA at the end), 
+    'captions' (array of 5 short Hindi phrases), 
+    'keywords' (array of 5 English search terms from tech background)."""
     
     try:
         response = g4f.ChatCompletion.create(model=g4f.models.gpt_35_turbo, messages=[{"role": "user", "content": prompt}])
         content = response.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
     except Exception as e:
+        print("⚠️ AI फेल, बैकअप स्क्रिप्ट का उपयोग...")
         return {
-            "title": "दुनिया का सबसे बड़ा हैकर! 😱 #shorts",
-            "description": "इंटरनेट का काला सच! #mystery #hacker #tech #hindi",
-            "tags": ["mystery", "hacker", "tech", "shorts", "hindi"],
-            "script": "इंटरनेट की दुनिया जितनी बाहर से साफ़ दिखती है, अंदर से उतनी ही खौफनाक है। क्या आप जानते हैं कि हर सेकंड में दुनिया का कोई न कोई बड़ा सर्वर हैक हो रहा है? आपकी जानकारी भी खतरे में हो सकती है।",
-            "captions": ["इंटरनेट का काला सच", "खौफनाक दुनिया", "बड़े सर्वर हैक", "आपकी जानकारी खतरे में", "तुरंत सावधान हो जाएं"],
-            "keywords": ["hacker", "dark web", "server room", "cyber security", "data matrix"]
+            "title": "इंटरनेट का काला सच! 😱 #shorts",
+            "description": "इंटरनेट के रहस्य! #mystery #hacker #tech",
+            "tags": ["mystery", "hacker", "tech", "shorts"],
+            "script": "इंटरनेट की दुनिया जितनी साफ़ दिखती है, अंदर से उतनी ही खौफनाक है। हर सेकंड कोई बड़ा सर्वर हैक हो रहा है। अपनी जानकारी सुरक्षित रखें। ऐसे ही रहस्य जानने के लिए अभी सब्सक्राइब करें!",
+            "captions": ["इंटरनेट का काला सच", "सर्वर हैक", "डेटा चोरी", "भयानक रहस्य", "अभी सब्सक्राइब करें"],
+            "keywords": ["hacker typing", "neon server", "cyber security", "matrix code", "data center"]
         }
 
-# --- 5. फ्री असली आवाज़ ---
+# --- 4. आवाज़ और बैकग्राउंड म्यूजिक (BGM) ---
 async def generate_audio(text):
-    print("🎙️ आवाज़ (Madhur) तैयार हो रही है...")
+    print("🎙️ आवाज़ तैयार हो रही है...")
     communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural")
     await communicate.save("voice.mp3")
-    return "voice.mp3"
+    
+    main_audio = AudioFileClip("voice.mp3")
+    
+    # BGM लॉजिक (अगर bgm.mp3 फाइल मौजूद है तो मिक्स करेगा)
+    if os.path.exists("bgm.mp3"):
+        print("🎵 बैकग्राउंड म्यूजिक जोड़ा जा रहा है...")
+        bg_audio = AudioFileClip("bgm.mp3").volumex(0.15) # वॉल्यूम कम रखें
+        # BGM को लूप करें ताकि वह मेन आवाज़ जितना लंबा हो जाए
+        from moviepy.audio.fx.all import audio_loop
+        bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
+        final_audio = CompositeAudioClip([main_audio, bg_audio])
+        return final_audio, main_audio.duration
+    
+    return main_audio, main_audio.duration
 
-# --- 6. स्मार्ट स्टॉक वीडियो डाउनलोडर (Pexels + Pixabay) ---
-def fetch_stock_video(keyword, duration, index):
-    print(f"📥 कीवर्ड '{keyword}' के लिए स्टॉक वीडियो ढूंढा जा रहा है...")
-    vid_name = f"stock_{index}.mp4"
-    video_url = None
-
+# --- 5. Pexels से वीडियो (No Black Screen & Video Slicing) ---
+def fetch_stock_video(duration):
+    keyword = random.choice(TECH_KEYWORDS)
+    print(f"📥 Pexels से '{keyword}' के लिए वीडियो ढूँढ रहे हैं...")
+    
+    # रैंडम पेज (Random Page Selection)
+    page = random.randint(1, 5) 
+    url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={page}&orientation=portrait"
+    
     try:
-        page = random.randint(1, 3) 
-        pexel_api = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={page}&orientation=portrait"
-        res = requests.get(pexel_api, headers={"Authorization": PEXELS_API_KEY}, timeout=15)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get("videos"):
-                video = random.choice(data["videos"])
-                video_files = sorted(video["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)
-                video_url = video_files[0]["link"]
-    except: pass
-
-    if not video_url:
-        try:
-            pixabay_api = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={urllib.parse.quote(keyword)}&per_page=10"
-            res = requests.get(pixabay_api, timeout=15)
-            if res.status_code == 200:
-                data = res.json()
-                if data.get("hits"):
-                    video = random.choice(data["hits"])
-                    video_url = video["videos"]["large"]["url"]
-        except: pass
-
-    if video_url:
-        try:
-            urllib.request.urlretrieve(video_url, vid_name)
-            clip = VideoFileClip(vid_name).without_audio()
+        response = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=15)
+        if response.status_code == 200 and response.json().get("videos"):
+            video = random.choice(response.json()["videos"])
+            video_files = sorted(video["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)
+            video_url = video_files[0]["link"]
+            
+            temp_name = f"temp_vid_{random.randint(1,999)}.mp4"
+            urllib.request.urlretrieve(video_url, temp_name)
+            
+            clip = VideoFileClip(temp_name).without_audio()
+            
+            # वीडियो स्लाइसिंग (Video Slicing) 5 से 10 सेकंड
             if clip.duration > duration + 1:
                 start_time = random.uniform(0, clip.duration - duration - 1)
                 clip = clip.subclip(start_time, start_time + duration)
             else:
                 repeats = int(duration / clip.duration) + 1
                 clip = concatenate_videoclips([clip] * repeats).subclip(0, duration)
+                
             clip = clip.resize(height=1920)
-            x_center = clip.w / 2
-            clip = clip.crop(x_center=x_center, y_center=1920/2, width=1080, height=1920)
+            clip = clip.crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920)
             return clip
-        except Exception as e:
-            pass
+    except Exception as e:
+        print(f"⚠️ Pexels फेल हुआ: {e}")
+    
+    # अगर Pexels फेल हो जाए तो एरर से बचने के लिए एक डमी क्लिप (काला पर्दा नहीं, रंगीन पर्दा)
+    img = Image.new('RGB', (1080, 1920), color=(10, 30, 50))
+    img.save("safe_fallback.jpg")
+    return ImageClip("safe_fallback.jpg").set_duration(duration)
 
-    img = Image.new('RGB', (1080, 1920), color=(20, 20, 25))
-    img.save(f"fallback_{index}.jpg")
-    return ImageClip(f"fallback_{index}.jpg").set_duration(duration)
-
-# --- 7. विशाल देवनागरी कैप्शन्स ---
-def create_hindi_caption(text, duration):
-    canvas_w, canvas_h = 1080, 500
+# --- 6. सबटाइटल पोज़िशनिंग और स्टाइल (Center & Stroke) ---
+def create_subtitle_clip(text, duration):
+    canvas_w, canvas_h = 1080, 1920  # पूरे स्क्रीन का साइज़
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
     font_path = "Yantramanav-Black.ttf"
     if not os.path.exists(font_path):
         try:
-            url = "https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf"
-            urllib.request.urlretrieve(url, font_path)
+            urllib.request.urlretrieve("https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf", font_path)
         except: pass
     
-    try: font = ImageFont.truetype(font_path, 130) 
+    try: font = ImageFont.truetype(font_path, 140) 
     except: font = ImageFont.load_default()
         
-    wrapped = textwrap.fill(text, width=14)
+    wrapped = textwrap.fill(text, width=12)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
-    x = (canvas_w - (bbox[2] - bbox[0])) // 2
-    y = (canvas_h - (bbox[3] - bbox[1])) // 2
     
-    draw.multiline_text((x+8, y+8), wrapped, font=font, fill="black", align='center')
-    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=18, stroke_fill="black", align='center')
+    # सेंटर में रखना (या थोड़ा नीचे: y = 1920 * 0.65 ताकि UI से बचे)
+    x = (canvas_w - (bbox[2] - bbox[0])) // 2
+    y = int(canvas_h * 0.65) - (bbox[3] - bbox[1]) // 2 
+    
+    # ब्लैक स्ट्रोक / आउटलाइन
+    stroke_width = 15
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=stroke_width, stroke_fill="black", align='center')
     
     temp_name = f"cap_{random.randint(1000,9999)}.png"
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 8. वीडियो को जोड़ना ---
-def compile_stock_video(keywords, captions, audio_path):
-    print("🎞️ स्टॉक वीडियोज़ को स्क्रिप्ट के साथ जोड़ा जा रहा है...")
-    audio = AudioFileClip(audio_path)
-    clip_duration = audio.duration / len(keywords)
+# --- 7. फाइनल वीडियो संपादन ---
+def compile_final_video(captions, final_audio, audio_duration):
+    print("🎞️ वीडियो, ऑडियो और सबटाइटल्स जोड़े जा रहे हैं...")
+    
+    # 2-सेकंड का बफर जोड़ना (ताकि वीडियो अचानक न कटे)
+    total_video_duration = audio_duration + 2.0 
+    clip_duration = total_video_duration / len(captions)
     processed_clips = []
     
-    for idx, keyword in enumerate(keywords[:5]):
-        base_clip = fetch_stock_video(keyword, clip_duration, idx)
-        cap_text = captions[idx % len(captions)]
+    for idx, cap_text in enumerate(captions):
+        base_clip = fetch_stock_video(clip_duration)
+        
         if cap_text.strip():
-            txt_clip = create_hindi_caption(cap_text, clip_duration).set_position(('center', 1300))
+            # सबटाइटल को स्क्रीन पर डालना
+            txt_clip = create_subtitle_clip(cap_text, clip_duration)
             combined = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920))
         else:
             combined = base_clip
+            
         processed_clips.append(combined)
         
     final_video = concatenate_videoclips(processed_clips, method="compose")
-    final_video = final_video.set_audio(audio).set_duration(audio.duration)
-    output_name = "final_viral_production.mp4"
-    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
+    # ऑडियो को वीडियो पर सेट करना
+    final_video = final_video.set_audio(final_audio).set_duration(total_video_duration)
     
-    audio.close()
-    final_video.close()
+    output_name = "final_viral_shorts.mp4"
+    final_video.write_videofile(output_name, fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return output_name
 
-# --- 9. YouTube अपलोड ---
+# --- 8. YouTube अपलोड ---
 def upload_video(video_file, title, description, tags):
-    print("📤 YouTube पर लाइव किया जा रहा है...")
+    print("📤 YouTube पर अपलोड हो रहा है...")
+    creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+    youtube = build("youtube", "v3", credentials=creds)
+    
     request_body = {
-        "snippet": {"categoryId": "22", "title": f"{title} #shorts", "description": description, "tags": tags},
+        "snippet": {"categoryId": "22", "title": f"{title}", "description": description, "tags": tags},
         "status": {"privacyStatus": "public", "madeForKids": False}
     }
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype="video/mp4")
-    response = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
-    return f"https://youtu.be/{response['id']}"
+    res = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media).execute()
+    return f"https://youtu.be/{res['id']}"
 
-# --- मुख्य ऑटोमेशन ---
+def send_telegram_report(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    try: requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"})
+    except: pass
+
 if __name__ == "__main__":
     try:
-        print("👑 ULTIMATE STOCK VIDEO ENGINE ONLINE 👑")
-        
-        # सबसे पहले चैनल की सफाई करेगा
-        clean_low_performing_videos()
-        
-        # वीडियो बनाएगा
         data = get_viral_script()
-        asyncio.run(generate_audio(data["script"]))
-        final_video = compile_stock_video(data["keywords"], data["captions"], "voice.mp3")
+        final_audio, audio_duration = asyncio.run(generate_audio(data["script"]))
         
-        # यूट्यूब पर अपलोड करेगा
+        final_video = compile_final_video(data["captions"], final_audio, audio_duration)
         video_url = upload_video(final_video, data["title"], data["description"], data["tags"])
-        print(f"\n🎉 सफलता! वीडियो लाइव हो गया: {video_url}")
         
-        # टेलीग्राम पर सफलता का मैसेज भेजेगा
-        send_telegram_report(f"✅ <b>नया वीडियो लाइव! (Stock Video)</b>\n🎬 Title: {data['title']}\n🔗 Link: {video_url}")
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव!</b>\n🎬 {data['title']}\n🔗 {video_url}")
+        print("🎉 सब कुछ सफलतापूर्वक हो गया!")
         
     except Exception as e:
-        error_details = str(traceback.format_exc())
-        print(f"\n❌ मशीन में कोई एरर आ गया:\n{error_details}")
-        
-        # टेलीग्राम पर एरर का मैसेज भेजेगा
-        send_telegram_report(f"🚨 <b>मशीन क्रैश:</b>\n{str(e)[:300]}")
+        err = str(traceback.format_exc())
+        send_telegram_report(f"🚨 <b>मशीन क्रैश:</b>\n{err[:300]}")
         sys.exit(1)
