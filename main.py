@@ -10,8 +10,21 @@ import urllib.parse
 import traceback
 import asyncio
 from datetime import datetime, timedelta, timezone
+
+# ==========================================
+# 🛑 THE MASTER PATCH (ANTIALIAS FIX) 🛑
+# यह वह पैच है जो आपके स्क्रीनशॉट वाले एरर को जड़ से ख़त्म करेगा
+import PIL
+from PIL import Image
+try:
+    if not hasattr(Image, 'ANTIALIAS'):
+        Image.ANTIALIAS = getattr(Image, 'Resampling', Image).LANCZOS
+except Exception as e:
+    print(f"Patch Error: {e}")
+# ==========================================
+
 from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, CompositeAudioClip
-from PIL import Image, ImageDraw, ImageFont
+from PIL import ImageDraw, ImageFont
 import edge_tts
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -32,7 +45,7 @@ PIXABAY_API_KEY = clean_key(os.environ.get("PIXABAY_API_KEY"))
 TELEGRAM_BOT_TOKEN = clean_key(os.environ.get("TELEGRAM_BOT_TOKEN"))
 TELEGRAM_CHAT_ID = clean_key(os.environ.get("TELEGRAM_CHAT_ID"))
 
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, PIXABAY_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
     sys.exit(1)
 
@@ -43,13 +56,13 @@ def send_telegram_report(message, is_error=False):
     if not is_error:
         payload["parse_mode"] = "HTML"
     try:
-        res = requests.post(url, json=payload, timeout=10)
+        res = requests.post(url, json=payload, timeout=15)
         if res.status_code != 200 and not is_error:
             del payload["parse_mode"]
-            requests.post(url, json=payload, timeout=10)
+            requests.post(url, json=payload, timeout=15)
     except: pass
 
-# --- 3. एडवांस API डिटेक्टिव (सटीक प्रॉब्लम रिपोर्टर) ---
+# --- 3. एडवांस API डिटेक्टिव ---
 def verify_all_systems():
     print("🔍 सिस्टम्स की गहरी जाँच की जा रही है...", flush=True)
     report = "🛠️ <b>सिस्टम हेल्थ रिपोर्ट:</b>\n\n"
@@ -62,29 +75,14 @@ def verify_all_systems():
         youtube.channels().list(part="id", mine=True).execute()
         report += "✅ <b>YouTube:</b> कनेक्टेड है।\n"
         is_youtube_ok = True
-    except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है (Google Cloud से नया लें)!\n"
+    except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है (नया लें)!\n"
 
     # Pexels Check
     try:
         pex_res = requests.get("https://api.pexels.com/videos/search?query=tech&per_page=1", headers={"Authorization": PEXELS_API_KEY}, timeout=10)
-        if pex_res.status_code == 200: 
-            report += "✅ <b>Pexels:</b> बिल्कुल सही काम कर रहा है।\n"
-        elif pex_res.status_code in [400, 401, 403]: 
-            report += f"🔴 <b>Pexels:</b> हमारी API Key गलत है या ब्लॉक है (Error {pex_res.status_code})।\n"
-        else: 
-            report += f"🟠 <b>Pexels:</b> उनका सर्वर खराब है (Error {pex_res.status_code})।\n"
-    except Exception as e: report += f"❌ <b>Pexels:</b> सर्वर से जुड़ नहीं पा रहा ({e})।\n"
-
-    # Pixabay Check
-    try:
-        pix_res = requests.get(f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q=tech&per_page=1", timeout=10)
-        if pix_res.status_code == 200: 
-            report += "✅ <b>Pixabay:</b> बिल्कुल सही काम कर रहा है।\n"
-        elif pix_res.status_code in [400, 401, 403]: 
-            report += f"🔴 <b>Pixabay:</b> हमारी API Key गलत है या स्पेस आ गया है (Error {pix_res.status_code})।\n"
-        else: 
-            report += f"🟠 <b>Pixabay:</b> उनका सर्वर खराब है (Error {pix_res.status_code})।\n"
-    except Exception as e: report += f"❌ <b>Pixabay:</b> सर्वर से जुड़ नहीं पा रहा ({e})।\n"
+        if pex_res.status_code == 200: report += "✅ <b>Pexels:</b> बिल्कुल सही काम कर रहा है।\n"
+        else: report += f"🔴 <b>Pexels:</b> एरर {pex_res.status_code}\n"
+    except Exception as e: report += f"❌ <b>Pexels:</b> डाउन है ({e})।\n"
 
     send_telegram_report(report)
     return is_youtube_ok
@@ -95,27 +93,23 @@ def clean_low_performing_videos():
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
         youtube = build("youtube", "v3", credentials=creds)
-        
         deleted_count = 0
         response = youtube.channels().list(part="contentDetails", mine=True).execute()
-        uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-        
-        playlist_response = youtube.playlistItems().list(part="snippet", playlistId=uploads_playlist_id, maxResults=50).execute()
+        uploads_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+        playlist_res = youtube.playlistItems().list(part="snippet", playlistId=uploads_id, maxResults=50).execute()
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         
-        for item in playlist_response.get('items', []):
-            video_id = item['snippet']['resourceId']['videoId']
-            published_at = datetime.fromisoformat(item['snippet']['publishedAt'].replace('Z', '+00:00'))
-            
-            if published_at < seven_days_ago:
-                stats = youtube.videos().list(part="statistics", id=video_id).execute()
+        for item in playlist_res.get('items', []):
+            vid_id = item['snippet']['resourceId']['videoId']
+            pub_at = datetime.fromisoformat(item['snippet']['publishedAt'].replace('Z', '+00:00'))
+            if pub_at < seven_days_ago:
+                stats = youtube.videos().list(part="statistics", id=vid_id).execute()
                 if stats.get('items'):
                     views = int(stats['items'][0]['statistics'].get('viewCount', 0))
                     if views < 100:
-                        youtube.videos().delete(id=video_id).execute()
+                        youtube.videos().delete(id=vid_id).execute()
                         deleted_count += 1
                         time.sleep(1)
-                        
         if deleted_count > 0:
             send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो हटाए गए।")
     except Exception as e:
@@ -135,54 +129,39 @@ FALLBACK_SCRIPTS = [
 def get_viral_script():
     print("🧠 AI से नई कहानी लिखी जा रही है...", flush=True)
     prompt = "You are a JSON API. Generate a mystery tech script for a YouTube Short in Hindi. You MUST return ONLY a valid JSON object. DO NOT wrap in markdown. The JSON MUST have exactly these keys: 'title', 'description', 'tags', 'script', and 'captions'."
-    
     for _ in range(3):
         try:
             url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}"
-            response = requests.get(url, timeout=20)
-            content = response.text.replace("```json", "").replace("```", "").strip()
-            
+            res = requests.get(url, timeout=20)
+            content = res.text.replace("```json", "").replace("```", "").strip()
             if "{" in content and "}" in content:
                 content = content[content.find("{"):content.rfind("}")+1]
-                
             data = json.loads(content)
             if isinstance(data, dict) and "script" in data and "captions" in data:
                 return data
         except: time.sleep(2)
-            
-    print("⚠️ AI ने गलत जवाब दिया, सुपर-बैकअप इस्तेमाल कर रहे हैं...", flush=True)
     return random.choice(FALLBACK_SCRIPTS)
 
 # --- 6. आवाज़ जनरेशन ---
 async def generate_audio(text):
     print("🎙️ आवाज़ तैयार हो रही है...", flush=True)
-    success = False
     for _ in range(3):
         try:
             communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural")
             await communicate.save("voice.mp3")
-            success = True
-            break
+            main_audio = AudioFileClip("voice.mp3")
+            if os.path.exists("bgm.mp3"):
+                bg_audio = AudioFileClip("bgm.mp3").volumex(0.15)
+                from moviepy.audio.fx.all import audio_loop
+                bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
+                return CompositeAudioClip([main_audio, bg_audio]), main_audio.duration
+            return main_audio, main_audio.duration
         except: time.sleep(2)
-            
-    if not success: raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
+    raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
 
-    main_audio = AudioFileClip("voice.mp3")
-    if os.path.exists("bgm.mp3"):
-        try:
-            bg_audio = AudioFileClip("bgm.mp3").volumex(0.15)
-            from moviepy.audio.fx.all import audio_loop
-            bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
-            return CompositeAudioClip([main_audio, bg_audio]), main_audio.duration
-        except: pass
-    return main_audio, main_audio.duration
-
-# --- 7. असली इंसान जैसा डाउनलोडर (403 Bypass) ---
+# --- 7. असली इंसान जैसा डाउनलोडर ---
 def safe_download_video(url, filename):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
         r = requests.get(url, stream=True, headers=headers, timeout=20)
         if r.status_code == 200:
@@ -190,40 +169,25 @@ def safe_download_video(url, filename):
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk: f.write(chunk)
             return True
-        else:
-            print(f"⚠️ डाउनलोड ब्लॉक हो गया (HTTP {r.status_code})", flush=True)
-            return False
-    except Exception as e:
-        print(f"⚠️ डाउनलोड एरर: {e}", flush=True)
         return False
+    except: return False
 
-# --- 8. गारंटीड स्टॉक वीडियो (No Image Fallback) ---
-TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "matrix code", "digital network", "abstract technology", "hacker coding"]
+# --- 8. गारंटीड स्टॉक वीडियो (अब क्रैश नहीं होगा) ---
+TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "matrix code"]
 
 def fetch_stock_video(duration, clip_index):
-    # यह 5 अलग-अलग कीवर्ड्स ट्राई करेगा, लेकिन इमेज नहीं लगाएगा।
+    errors = []
     for attempt in range(5):
         keyword = random.choice(TECH_KEYWORDS)
         video_url = None
         
-        # Pexels Try
         try:
             url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={random.randint(1, 3)}&orientation=portrait"
             res = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=10)
             if res.status_code == 200 and res.json().get("videos"):
                 video_url = sorted(random.choice(res.json()["videos"])["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)[0]["link"]
-        except: pass
+        except Exception as e: errors.append(f"Pexels Search: {e}")
 
-        # Pixabay Try (Backup)
-        if not video_url:
-            try:
-                pix_url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={urllib.parse.quote(keyword)}&per_page=10"
-                res = requests.get(pix_url, timeout=10)
-                if res.status_code == 200 and res.json().get("hits"):
-                    video_url = random.choice(res.json()["hits"])["videos"].get("large", random.choice(res.json()["hits"])["videos"].get("medium"))["url"]
-            except: pass
-
-        # Download & Process
         if video_url:
             temp_name = f"temp_vid_{clip_index}_{attempt}.mp4"
             if safe_download_video(video_url, temp_name):
@@ -238,30 +202,30 @@ def fetch_stock_video(duration, clip_index):
                     else:
                         clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1)).subclip(0, duration)
                         
+                    # यहीं ANTIALIAS की वजह से क्रैश होता था, अब यह पैच की वजह से 100% चलेगा
                     return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920).set_duration(duration)
                 except Exception as e:
-                    print(f"⚠️ प्रोसेसिंग एरर: {e}", flush=True)
+                    errors.append(f"Resize/Cut Error: {e}")
+            else:
+                errors.append("Download Blocked/Failed")
 
-    # अगर 5 बार कोशिश के बाद भी वीडियो नहीं मिला, तो इमेज बनाने के बजाय सीधा मशीन को रोक देगा (Error Throw)
-    raise Exception(f"Pexels और Pixabay दोनों से असली वीडियो डाउनलोड नहीं हो पाया (शायद सर्वर ने पूरी तरह ब्लॉक कर दिया है)। कोई कूड़ा इमेज इस्तेमाल नहीं की जाएगी।")
+    error_summary = "\n".join(errors[-3:]) # आखिरी 3 एरर दिखाएगा
+    raise Exception(f"5 कोशिशों के बाद भी वीडियो नहीं बना। कारण:\n{error_summary}")
 
 # --- 9. सबटाइटल्स ---
 def create_subtitle_clip(text, duration, clip_index):
     canvas_w, canvas_h = 1080, 1920
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    
     font_path = "Yantramanav-Black.ttf"
     if not os.path.exists(font_path):
         try: urllib.request.urlretrieve("https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf", font_path)
         except: pass
-    
     try: font = ImageFont.truetype(font_path, 140) 
     except: font = ImageFont.load_default()
         
     wrapped = textwrap.fill(text, width=12)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align='center')
-    
     x = (canvas_w - (bbox[2] - bbox[0])) // 2
     y = int(canvas_h * 0.65) - (bbox[3] - bbox[1]) // 2 
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFE81F", stroke_width=15, stroke_fill="black", align='center')
@@ -302,7 +266,6 @@ def upload_video(video_file, title, description, tags):
 
 if __name__ == "__main__":
     try:
-        # अगर YouTube Token एक्सपायर है तो मशीन यहीं रुक जाएगी
         if not verify_all_systems():
             send_telegram_report("🚨 <b>मशीन बंद:</b> YouTube टोकन एक्सपायर हो गया है। कृपया नया टोकन अपडेट करें।", is_error=True)
             sys.exit(1)
@@ -318,7 +281,6 @@ if __name__ == "__main__":
         
         final_audio, audio_duration = asyncio.run(generate_audio(safe_script))
         
-        # अगर असली वीडियो नहीं मिला, तो यह इमेज नहीं बनाएगा, बल्कि सीधा क्रैश रिपोर्ट भेजेगा
         final_video = compile_final_video(safe_captions, final_audio, audio_duration)
         video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
         
@@ -327,6 +289,7 @@ if __name__ == "__main__":
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        send_telegram_report(f"🚨 मशीन क्रैश रिपोर्ट:\n\n{error_details[:800]}", is_error=True)
+        # अब अगर कोई एरर आएगा, तो उसकी पूरी जन्म-कुंडली टेलीग्राम पर आएगी
+        send_telegram_report(f"🚨 मशीन क्रैश (विस्तृत रिपोर्ट):\n\n{error_details[:800]}", is_error=True)
         print("❌ एरर आ गया, टेलीग्राम पर रिपोर्ट भेजी गई।", flush=True)
         sys.exit(1)
