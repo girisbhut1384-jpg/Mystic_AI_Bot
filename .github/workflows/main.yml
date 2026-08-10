@@ -3,7 +3,8 @@ name: Mystic Bot Auto Video Creator
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 5 * * *' # रोज़ सुबह का शेड्यूल (आप चाहें तो बदल सकते हैं)
+    # यह टाइमर हर 4 घंटे में मशीन चालू करेगा (दिन में 6 वीडियो)
+    - cron: '0 */4 * * *' 
 
 jobs:
   build-and-upload:
@@ -24,7 +25,8 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install requests moviepy==1.0.3 Pillow edge-tts g4f google-api-python-client google-auth-httplib2 google-auth-oauthlib
+        # यह सीधा requirements.txt से सारी सही चीजें डाउनलोड कर लेगा
+        pip install -r requirements.txt 
 
     - name: Run Main Script
       env:
