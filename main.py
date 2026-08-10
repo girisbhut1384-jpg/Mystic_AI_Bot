@@ -31,10 +31,9 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# GitHub Actions में हिंदी टेक्स्ट को क्रैश होने से बचाने के लिए
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# --- 1. API क्रेडेंशियल्स (सख्त सफाई के साथ) ---
+# --- 1. API क्रेडेंशियल्स ---
 def clean_key(k):
     return k.strip().replace(" ", "").replace("\n", "") if k else ""
 
@@ -50,7 +49,7 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, TELEGRAM_BO
     print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
     sys.exit(1)
 
-# --- 2. 100% सेफ टेलीग्राम रिपोर्टिंग ---
+# --- 2. टेलीग्राम रिपोर्टिंग ---
 def send_telegram_report(message, is_error=False):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
@@ -88,7 +87,6 @@ def verify_all_systems():
 
 # --- 4. ऑटो-डिलीट सिस्टम ---
 def clean_low_performing_videos():
-    print("🧹 पुराने फ्लॉप वीडियो को स्कैन कर रहे हैं...", flush=True)
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
         youtube = build("youtube", "v3", credentials=creds)
@@ -113,20 +111,21 @@ def clean_low_performing_videos():
             send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो हटाए गए।")
     except: pass
 
-# --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन ---
+# --- 5. फुल-प्रूफ और तथ्यात्मक रूप से सही स्क्रिप्ट ---
 FALLBACK_SCRIPTS = [
     {
-        "title": "इंटरनेट का सबसे डरावना सच! 😱 #shorts",
-        "description": "डार्क वेब के रहस्य! #mystery #hacker #tech",
-        "tags": ["mystery", "hacker", "tech", "shorts"],
-        "script": "इंटरनेट की दुनिया जितनी साफ़ दिखती है, अंदर से उतनी ही खौफनाक है। जिसे हम इस्तेमाल करते हैं, वो सिर्फ 4 प्रतिशत है। बाकी 96 प्रतिशत डार्क वेब है, जहां ऐसे रहस्य छिपे हैं जो आपकी नींद उड़ा देंगे। ऐसे रहस्य जानने के लिए अभी सब्सक्राइब करें!",
-        "captions": ["इंटरनेट का काला सच", "सिर्फ 4 प्रतिशत", "बाकी डार्क वेब", "नींद उड़ा देंगे", "अभी सब्सक्राइब करें"]
+        "title": "इंटरनेट का खौफनाक सच! 😱 #shorts",
+        "description": "डीप वेब और डार्क वेब के रहस्य! #mystery #hacker #tech #deepweb",
+        "tags": ["mystery", "hacker", "tech", "shorts", "deepweb", "darkweb"],
+        "script": "इंटरनेट की दुनिया जितनी साफ़ दिखती है, अंदर से उतनी ही गहरी है। जिसे हम गूगल पर खोजते हैं, वो सिर्फ 4 प्रतिशत है। बाकी 96 प्रतिशत 'डीप वेब' है, जहाँ प्राइवेट डेटा होता है। लेकिन इसी के सबसे अंधेरे कोने में छिपा है 'डार्क वेब'। यहाँ ऐसे खौफनाक रहस्य और काले कारनामे होते हैं, जो आपकी नींद उड़ा देंगे। डार्क वेब से हमेशा दूर रहें, और ऐसे रहस्य जानने के लिए अभी सब्सक्राइब करें!",
+        "captions": ["इंटरनेट का काला सच", "सिर्फ 4% सरफेस वेब", "96% डीप वेब", "खौफनाक डार्क वेब", "अभी सब्सक्राइब करें"]
     }
 ]
 
 def get_viral_script():
     print("🧠 AI से नई कहानी लिखी जा रही है...", flush=True)
-    prompt = "You are a JSON API. Generate a mystery tech script for a YouTube Short in Hindi. You MUST return ONLY a valid JSON object. DO NOT wrap in markdown. The JSON MUST have exactly these keys: 'title', 'description', 'tags', 'script', and 'captions'."
+    # AI को भी सख्त निर्देश दिया गया है कि डार्क वेब और डीप वेब में गलती न करे
+    prompt = "You are a JSON API. Generate a highly factually accurate mystery tech script for a YouTube Short in Hindi. Do NOT confuse Deep Web with Dark Web (Deep web is 96%, Dark Web is <1%). End with a CTA. You MUST return ONLY a valid JSON object. DO NOT wrap in markdown. The JSON MUST have exactly these keys: 'title', 'description', 'tags', 'script', and 'captions'."
     for _ in range(3):
         try:
             url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}"
@@ -157,7 +156,7 @@ async def generate_audio(text):
                 except: pass
             return main_audio, main_audio.duration
         except: time.sleep(2)
-    raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
+    raise Exception("आवाज़ जनरेट नहीं हो पाई")
 
 # --- 7. असली इंसान जैसा डाउनलोडर ---
 def safe_download_video(url, filename):
@@ -184,8 +183,12 @@ def smart_crop_to_916(clip):
         clip = clip.resize(width=1080)
         return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
 
-# --- 9. 100% असली स्टॉक वीडियो ---
-TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "matrix code"]
+# --- 9. 100% डार्क और सीरियस स्टॉक वीडियो (नियॉन और डांसिंग को ब्लॉक किया गया है) ---
+TECH_KEYWORDS = [
+    "hacker typing in dark", "cyber security breach", "dark server room",
+    "matrix green code", "hacker with hoodie", "computer virus code",
+    "binary code digital", "scary technology", "dark web hacker"
+]
 
 def fetch_stock_video(duration, clip_index):
     errors = []
@@ -255,7 +258,7 @@ def create_subtitle_clip(text, duration, clip_index):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 11. वीडियो कंपाइलेशन (🔥 THE AUDIO FIX 🔥) ---
+# --- 11. वीडियो कंपाइलेशन ---
 def compile_final_video(captions, final_audio, audio_duration):
     print("🎞️ फाइनल वीडियो जोड़ा जा रहा है...", flush=True)
     total_duration = audio_duration + 2.0 
@@ -272,9 +275,6 @@ def compile_final_video(captions, final_audio, audio_duration):
             processed_clips.append(base_clip)
             
     final_video = concatenate_videoclips(processed_clips, method="compose").set_duration(total_duration)
-    
-    # 🔥 यही वह मैजिक पैच है जो 2 सेकंड वाले एरर को जड़ से ख़त्म करेगा 🔥
-    # यह ऑडियो क्लिप को वीडियो के बराबर (total_duration) खींच देगा और खाली जगह पर शांति (Silence) रखेगा
     padded_audio = CompositeAudioClip([final_audio]).set_duration(total_duration)
     final_video = final_video.set_audio(padded_audio)
     
