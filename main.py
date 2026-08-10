@@ -172,20 +172,16 @@ def safe_download_video(url, filename):
         return False
     except: return False
 
-# --- 8. 🛠️ सुपर-स्मार्ट क्रॉपिंग इंजन (The Ultimate Fix) ---
+# --- 8. सुपर-स्मार्ट क्रॉपिंग इंजन ---
 def smart_crop_to_916(clip):
     target_ratio = 1080 / 1920
     clip_ratio = clip.w / clip.h
     
     if clip_ratio > target_ratio:
-        # अगर वीडियो बहुत चौड़ा है, तो पहले हाइट को 1920 करेंगे
         clip = clip.resize(height=1920)
-        # अब बीच से 1080 पिक्सल काटेंगे (कोई माइनस वैल्यू नहीं आएगी)
         return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
     else:
-        # अगर वीडियो बहुत लंबा है, तो पहले विड्थ को 1080 करेंगे
         clip = clip.resize(width=1080)
-        # अब बीच से 1920 पिक्सल काटेंगे
         return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
 
 # --- 9. 100% असली स्टॉक वीडियो ---
@@ -227,7 +223,6 @@ def fetch_stock_video(duration, clip_index):
                         repeats = int(duration / clip.duration) + 1
                         clip = concatenate_videoclips([clip] * repeats).subclip(0, duration)
                         
-                    # यहाँ हमने स्मार्ट क्रॉपिंग इंजन लगा दिया है!
                     clip = smart_crop_to_916(clip)
                     return clip.set_duration(duration)
                 except Exception as e:
@@ -260,7 +255,7 @@ def create_subtitle_clip(text, duration, clip_index):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 11. वीडियो कंपाइलेशन ---
+# --- 11. वीडियो कंपाइलेशन (🔥 THE AUDIO FIX 🔥) ---
 def compile_final_video(captions, final_audio, audio_duration):
     print("🎞️ फाइनल वीडियो जोड़ा जा रहा है...", flush=True)
     total_duration = audio_duration + 2.0 
@@ -276,7 +271,13 @@ def compile_final_video(captions, final_audio, audio_duration):
         else:
             processed_clips.append(base_clip)
             
-    final_video = concatenate_videoclips(processed_clips, method="compose").set_audio(final_audio).set_duration(total_duration)
+    final_video = concatenate_videoclips(processed_clips, method="compose").set_duration(total_duration)
+    
+    # 🔥 यही वह मैजिक पैच है जो 2 सेकंड वाले एरर को जड़ से ख़त्म करेगा 🔥
+    # यह ऑडियो क्लिप को वीडियो के बराबर (total_duration) खींच देगा और खाली जगह पर शांति (Silence) रखेगा
+    padded_audio = CompositeAudioClip([final_audio]).set_duration(total_duration)
+    final_video = final_video.set_audio(padded_audio)
+    
     final_video.write_videofile("final_viral_shorts.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return "final_viral_shorts.mp4"
 
@@ -315,7 +316,6 @@ if __name__ == "__main__":
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        # 🔥 मैंने यहाँ [-1500:] कर दिया है, ताकि एरर का असली निचला हिस्सा आए!
         send_telegram_report(f"🚨 मशीन क्रैश (विस्तृत रिपोर्ट):\n\n{error_details[-1500:]}", is_error=True)
         print("❌ एरर आ गया, टेलीग्राम पर रिपोर्ट भेजी गई।", flush=True)
         sys.exit(1)
