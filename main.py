@@ -22,16 +22,10 @@ except:
     pass
 # ==========================================
 
-# 🛑 ALL MOVIEPY IMPORTS (अब ImageClip कभी मिस नहीं होगा) 🛑
 from moviepy.editor import (
-    AudioFileClip, 
-    VideoFileClip, 
-    ImageClip, 
-    CompositeVideoClip, 
-    CompositeAudioClip, 
-    concatenate_videoclips
+    AudioFileClip, VideoFileClip, ImageClip, 
+    CompositeVideoClip, CompositeAudioClip, concatenate_videoclips
 )
-
 import edge_tts
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -40,7 +34,7 @@ from googleapiclient.http import MediaFileUpload
 # GitHub Actions में हिंदी टेक्स्ट को क्रैश होने से बचाने के लिए
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# --- 1. API क्रेडेंशियल्स (ऑटो-क्लीनर) ---
+# --- 1. API क्रेडेंशियल्स (सख्त सफाई के साथ) ---
 def clean_key(k):
     return k.strip().replace(" ", "").replace("\n", "") if k else ""
 
@@ -69,7 +63,7 @@ def send_telegram_report(message, is_error=False):
             requests.post(url, json=payload, timeout=15)
     except: pass
 
-# --- 3. एडवांस API डिटेक्टिव ---
+# --- 3. प्री-चेक सिस्टम ---
 def verify_all_systems():
     print("🔍 सिस्टम्स की जाँच की जा रही है...", flush=True)
     report = "🛠️ <b>सिस्टम हेल्थ रिपोर्ट:</b>\n\n"
@@ -117,8 +111,7 @@ def clean_low_performing_videos():
                         time.sleep(1)
         if deleted_count > 0:
             send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो हटाए गए।")
-    except Exception as e:
-        print(f"⚠️ क्लीनअप एरर: {e}", flush=True)
+    except: pass
 
 # --- 5. फुल-प्रूफ स्क्रिप्ट जनरेशन ---
 FALLBACK_SCRIPTS = [
@@ -161,8 +154,7 @@ async def generate_audio(text):
                     from moviepy.audio.fx.all import audio_loop
                     bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
                     main_audio = CompositeAudioClip([main_audio, bg_audio])
-                except:
-                    pass # BGM फेल होने पर भी मेन आवाज़ बनी रहेगी
+                except: pass
             return main_audio, main_audio.duration
         except: time.sleep(2)
     raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
@@ -180,7 +172,23 @@ def safe_download_video(url, filename):
         return False
     except: return False
 
-# --- 8. 100% असली स्टॉक वीडियो (ब्लैंक वीडियो की पॉलिसी खत्म) ---
+# --- 8. 🛠️ सुपर-स्मार्ट क्रॉपिंग इंजन (The Ultimate Fix) ---
+def smart_crop_to_916(clip):
+    target_ratio = 1080 / 1920
+    clip_ratio = clip.w / clip.h
+    
+    if clip_ratio > target_ratio:
+        # अगर वीडियो बहुत चौड़ा है, तो पहले हाइट को 1920 करेंगे
+        clip = clip.resize(height=1920)
+        # अब बीच से 1080 पिक्सल काटेंगे (कोई माइनस वैल्यू नहीं आएगी)
+        return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
+    else:
+        # अगर वीडियो बहुत लंबा है, तो पहले विड्थ को 1080 करेंगे
+        clip = clip.resize(width=1080)
+        # अब बीच से 1920 पिक्सल काटेंगे
+        return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
+
+# --- 9. 100% असली स्टॉक वीडियो ---
 TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "matrix code"]
 
 def fetch_stock_video(duration, clip_index):
@@ -194,7 +202,7 @@ def fetch_stock_video(duration, clip_index):
             res = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=10)
             if res.status_code == 200 and res.json().get("videos"):
                 video_url = sorted(random.choice(res.json()["videos"])["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)[0]["link"]
-        except Exception as e: errors.append(f"Pexels Search: {e}")
+        except Exception as e: errors.append(f"Pexels Error: {e}")
 
         if not video_url and PIXABAY_API_KEY:
             try:
@@ -202,7 +210,7 @@ def fetch_stock_video(duration, clip_index):
                 res = requests.get(pix_url, timeout=10)
                 if res.status_code == 200 and res.json().get("hits"):
                     video_url = random.choice(res.json()["hits"])["videos"].get("large", random.choice(res.json()["hits"])["videos"].get("medium"))["url"]
-            except Exception as e: errors.append(f"Pixabay Search: {e}")
+            except Exception as e: errors.append(f"Pixabay Error: {e}")
 
         if video_url:
             temp_name = f"temp_vid_{clip_index}_{attempt}.mp4"
@@ -216,19 +224,21 @@ def fetch_stock_video(duration, clip_index):
                         start_time = random.uniform(0, clip.duration - duration - 1)
                         clip = clip.subclip(start_time, start_time + duration)
                     else:
-                        clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1)).subclip(0, duration)
+                        repeats = int(duration / clip.duration) + 1
+                        clip = concatenate_videoclips([clip] * repeats).subclip(0, duration)
                         
-                    return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920).set_duration(duration)
+                    # यहाँ हमने स्मार्ट क्रॉपिंग इंजन लगा दिया है!
+                    clip = smart_crop_to_916(clip)
+                    return clip.set_duration(duration)
                 except Exception as e:
-                    errors.append(f"Resize Error: {e}")
+                    errors.append(f"Cut Error: {e}")
             else:
-                errors.append("Download Failed")
+                errors.append("Download Blocked")
 
-    # ब्लैंक वीडियो बनाने के बजाय सीधा एरर देगा और काम रोक देगा
     error_summary = "\n".join(errors[-3:])
-    raise Exception(f"5 कोशिशों के बाद भी असली वीडियो नहीं मिला। कारण:\n{error_summary}")
+    raise Exception(f"5 कोशिशों के बाद भी वीडियो नहीं मिला। कारण:\n{error_summary}")
 
-# --- 9. सबटाइटल्स ---
+# --- 10. सबटाइटल्स ---
 def create_subtitle_clip(text, duration, clip_index):
     canvas_w, canvas_h = 1080, 1920
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -250,7 +260,7 @@ def create_subtitle_clip(text, duration, clip_index):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 10. वीडियो कंपाइलेशन ---
+# --- 11. वीडियो कंपाइलेशन ---
 def compile_final_video(captions, final_audio, audio_duration):
     print("🎞️ फाइनल वीडियो जोड़ा जा रहा है...", flush=True)
     total_duration = audio_duration + 2.0 
@@ -270,7 +280,7 @@ def compile_final_video(captions, final_audio, audio_duration):
     final_video.write_videofile("final_viral_shorts.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return "final_viral_shorts.mp4"
 
-# --- 11. YouTube अपलोड ---
+# --- 12. YouTube अपलोड ---
 def upload_video(video_file, title, description, tags):
     print("📤 YouTube पर अपलोड हो रहा है...", flush=True)
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -305,6 +315,7 @@ if __name__ == "__main__":
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        send_telegram_report(f"🚨 मशीन क्रैश (विस्तृत रिपोर्ट):\n\n{error_details[:800]}", is_error=True)
+        # 🔥 मैंने यहाँ [-1500:] कर दिया है, ताकि एरर का असली निचला हिस्सा आए!
+        send_telegram_report(f"🚨 मशीन क्रैश (विस्तृत रिपोर्ट):\n\n{error_details[-1500:]}", is_error=True)
         print("❌ एरर आ गया, टेलीग्राम पर रिपोर्ट भेजी गई।", flush=True)
         sys.exit(1)
