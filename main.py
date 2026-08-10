@@ -13,18 +13,25 @@ from datetime import datetime, timedelta, timezone
 
 # ==========================================
 # 🛑 THE MASTER PATCH (ANTIALIAS FIX) 🛑
-# यह वह पैच है जो आपके स्क्रीनशॉट वाले एरर को जड़ से ख़त्म करेगा
 import PIL
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 try:
     if not hasattr(Image, 'ANTIALIAS'):
         Image.ANTIALIAS = getattr(Image, 'Resampling', Image).LANCZOS
-except Exception as e:
-    print(f"Patch Error: {e}")
+except:
+    pass
 # ==========================================
 
-from moviepy.editor import AudioFileClip, concatenate_videoclips, CompositeVideoClip, VideoFileClip, CompositeAudioClip
-from PIL import ImageDraw, ImageFont
+# 🛑 ALL MOVIEPY IMPORTS (अब ImageClip कभी मिस नहीं होगा) 🛑
+from moviepy.editor import (
+    AudioFileClip, 
+    VideoFileClip, 
+    ImageClip, 
+    CompositeVideoClip, 
+    CompositeAudioClip, 
+    concatenate_videoclips
+)
+
 import edge_tts
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -64,20 +71,18 @@ def send_telegram_report(message, is_error=False):
 
 # --- 3. एडवांस API डिटेक्टिव ---
 def verify_all_systems():
-    print("🔍 सिस्टम्स की गहरी जाँच की जा रही है...", flush=True)
+    print("🔍 सिस्टम्स की जाँच की जा रही है...", flush=True)
     report = "🛠️ <b>सिस्टम हेल्थ रिपोर्ट:</b>\n\n"
     is_youtube_ok = False
     
-    # YouTube Check
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
         youtube = build("youtube", "v3", credentials=creds)
         youtube.channels().list(part="id", mine=True).execute()
         report += "✅ <b>YouTube:</b> कनेक्टेड है।\n"
         is_youtube_ok = True
-    except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है (नया लें)!\n"
+    except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है!\n"
 
-    # Pexels Check
     try:
         pex_res = requests.get("https://api.pexels.com/videos/search?query=tech&per_page=1", headers={"Authorization": PEXELS_API_KEY}, timeout=10)
         if pex_res.status_code == 200: report += "✅ <b>Pexels:</b> बिल्कुल सही काम कर रहा है।\n"
@@ -151,10 +156,13 @@ async def generate_audio(text):
             await communicate.save("voice.mp3")
             main_audio = AudioFileClip("voice.mp3")
             if os.path.exists("bgm.mp3"):
-                bg_audio = AudioFileClip("bgm.mp3").volumex(0.15)
-                from moviepy.audio.fx.all import audio_loop
-                bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
-                return CompositeAudioClip([main_audio, bg_audio]), main_audio.duration
+                try:
+                    bg_audio = AudioFileClip("bgm.mp3").volumex(0.15)
+                    from moviepy.audio.fx.all import audio_loop
+                    bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
+                    main_audio = CompositeAudioClip([main_audio, bg_audio])
+                except:
+                    pass # BGM फेल होने पर भी मेन आवाज़ बनी रहेगी
             return main_audio, main_audio.duration
         except: time.sleep(2)
     raise Exception("आवाज़ जनरेट नहीं हो पाई (Edge-TTS Error)")
@@ -172,7 +180,7 @@ def safe_download_video(url, filename):
         return False
     except: return False
 
-# --- 8. गारंटीड स्टॉक वीडियो (अब क्रैश नहीं होगा) ---
+# --- 8. 100% असली स्टॉक वीडियो (ब्लैंक वीडियो की पॉलिसी खत्म) ---
 TECH_KEYWORDS = ["hacker typing", "neon server", "cyber security", "data center", "matrix code"]
 
 def fetch_stock_video(duration, clip_index):
@@ -188,6 +196,14 @@ def fetch_stock_video(duration, clip_index):
                 video_url = sorted(random.choice(res.json()["videos"])["video_files"], key=lambda x: x['width'] * x['height'], reverse=True)[0]["link"]
         except Exception as e: errors.append(f"Pexels Search: {e}")
 
+        if not video_url and PIXABAY_API_KEY:
+            try:
+                pix_url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={urllib.parse.quote(keyword)}&per_page=10"
+                res = requests.get(pix_url, timeout=10)
+                if res.status_code == 200 and res.json().get("hits"):
+                    video_url = random.choice(res.json()["hits"])["videos"].get("large", random.choice(res.json()["hits"])["videos"].get("medium"))["url"]
+            except Exception as e: errors.append(f"Pixabay Search: {e}")
+
         if video_url:
             temp_name = f"temp_vid_{clip_index}_{attempt}.mp4"
             if safe_download_video(video_url, temp_name):
@@ -202,15 +218,15 @@ def fetch_stock_video(duration, clip_index):
                     else:
                         clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1)).subclip(0, duration)
                         
-                    # यहीं ANTIALIAS की वजह से क्रैश होता था, अब यह पैच की वजह से 100% चलेगा
                     return clip.resize(height=1920).crop(x_center=clip.w/2, y_center=1920/2, width=1080, height=1920).set_duration(duration)
                 except Exception as e:
-                    errors.append(f"Resize/Cut Error: {e}")
+                    errors.append(f"Resize Error: {e}")
             else:
-                errors.append("Download Blocked/Failed")
+                errors.append("Download Failed")
 
-    error_summary = "\n".join(errors[-3:]) # आखिरी 3 एरर दिखाएगा
-    raise Exception(f"5 कोशिशों के बाद भी वीडियो नहीं बना। कारण:\n{error_summary}")
+    # ब्लैंक वीडियो बनाने के बजाय सीधा एरर देगा और काम रोक देगा
+    error_summary = "\n".join(errors[-3:])
+    raise Exception(f"5 कोशिशों के बाद भी असली वीडियो नहीं मिला। कारण:\n{error_summary}")
 
 # --- 9. सबटाइटल्स ---
 def create_subtitle_clip(text, duration, clip_index):
@@ -289,7 +305,6 @@ if __name__ == "__main__":
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        # अब अगर कोई एरर आएगा, तो उसकी पूरी जन्म-कुंडली टेलीग्राम पर आएगी
         send_telegram_report(f"🚨 मशीन क्रैश (विस्तृत रिपोर्ट):\n\n{error_details[:800]}", is_error=True)
         print("❌ एरर आ गया, टेलीग्राम पर रिपोर्ट भेजी गई।", flush=True)
         sys.exit(1)
