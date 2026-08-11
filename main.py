@@ -52,7 +52,8 @@ if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, TELEGRAM_BO
 def send_telegram_report(message, is_error=False):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    if not is_error: payload["parse_mode"] = "HTML"
+    if not is_error:
+        payload["parse_mode"] = "HTML"
     try:
         res = requests.post(url, json=payload, timeout=15)
         if res.status_code != 200 and not is_error:
@@ -94,21 +95,19 @@ def clean_low_performing_videos():
                     time.sleep(1)
     except: pass
 
-# --- 5. 🚀 द अल्टीमेट वायरल विजुअल डिक्शनरी ---
-# AI अब खुद से कोई भी फालतू कीवर्ड (जैसे Silk Road या Toy Car) नहीं बना पाएगा।
-# उसे हर सीन के लिए इन्ही में से एक चुनना होगा, जो Pexels पर 100% सही और डार्क वीडियो ही देते हैं।
-GUARANTEED_DARK_VISUALS = [
-    "hacker typing dark room", 
-    "police siren flashing lights night",
-    "abstract green digital code", 
-    "secret confidential files document",
-    "dark abandoned building night", 
-    "hooded man computer dark",
-    "cyber security digital lock", 
-    "server room blinking lights",
-    "arrest handcuffs police", 
-    "iceberg underwater dark",
-    "detective investigation board"
+# --- 5. 🚀 डॉक्युमेंट्री स्टाइल विजुअल डिक्शनरी (Strict Prompts) ---
+# AI अब अपनी मर्जी से कोई खिलौने या बर्फ नहीं लाएगा। वह सिर्फ इन्हीं सीरियस कीवर्ड्स का इस्तेमाल करेगा।
+STRICT_VISUALS = [
+    "hacker dark room", 
+    "police raid flashing lights", 
+    "young man hoodie laptop", 
+    "cyber security digital lock",
+    "secret confidential files",
+    "dark abandoned street night",
+    "abstract glowing network data",
+    "shocked person screen night",
+    "criminal arrested police",
+    "dark deep web mystery"
 ]
 
 FALLBACK_SCRIPTS = [
@@ -116,18 +115,18 @@ FALLBACK_SCRIPTS = [
         "title": "सिल्क रोड का खौफनाक सच! 😱 #shorts",
         "description": "डार्क वेब का असली सच और सिल्क रोड की कहानी। #DarkWebHindi #SilkRoad #InternetMystery",
         "tags": ["DarkWebHindi", "SilkRoad", "InternetMystery", "shorts"],
-        "script": "क्या आपको पता है, आप इंटरनेट पर जो भी करते हैं, वो कोई और भी देख सकता है? डार्क वेब पर एक ऐसा बाज़ार था, जिसका नाम था सिल्क रोड। यहाँ हैकर्स से लेकर हथियारों तक की बोली लगती थी। जब FBI ने यहाँ छापा मारा, तो दुनिया हिल गई। क्योंकि इस काले साम्राज्य का मालिक कोई डॉन नहीं, बल्कि रॉस उलब्रिच्ट नाम का एक आम सा कॉलेज का लड़का था! ऐसे ही डरावने रहस्य जानने के लिए अभी सब्सक्राइब करें!",
+        "script": "क्या आपको पता है, डार्क वेब पर एक ऐसा बाज़ार था, जिसका नाम था सिल्क रोड। यहाँ हथियारों से लेकर हैकर्स तक की बोली लगती थी। जब FBI ने यहाँ छापा मारा, तो दुनिया हिल गई। क्योंकि इस काले साम्राज्य का मालिक कोई डॉन नहीं, बल्कि रॉस उलब्रिच्ट नाम का एक आम सा कॉलेज का लड़का था! ऐसे ही डरावने रहस्य जानने के लिए अभी सब्सक्राइब करें!",
         "scenes": [
-            {"caption": "क्या आपको पता है?", "search_query": "hacker typing dark room"},
-            {"caption": "कोई आपको देख रहा है", "search_query": "cyber security digital lock"},
-            {"caption": "डार्क वेब का बाज़ार", "search_query": "abstract green digital code"},
-            {"caption": "नाम था सिल्क रोड", "search_query": "secret confidential files document"},
-            {"caption": "हथियारों की बोली", "search_query": "dark abandoned building night"},
-            {"caption": "FBI का खतरनाक छापा", "search_query": "police siren flashing lights night"},
-            {"caption": "दुनिया हिल गई", "search_query": "server room blinking lights"},
-            {"caption": "मालिक कोई डॉन नहीं", "search_query": "hooded man computer dark"},
-            {"caption": "आम सा लड़का रॉस था!", "search_query": "arrest handcuffs police"},
-            {"caption": "अभी सब्सक्राइब करें", "search_query": "abstract green digital code"}
+            {"caption": "क्या आपको पता है?", "search_query": "hacker dark room"},
+            {"caption": "डार्क वेब का बाज़ार", "search_query": "abstract glowing network data"},
+            {"caption": "नाम था सिल्क रोड", "search_query": "dark deep web mystery"},
+            {"caption": "हथियारों की बोली", "search_query": "secret confidential files"},
+            {"caption": "FBI का खतरनाक छापा", "search_query": "police raid flashing lights"},
+            {"caption": "दुनिया हिल गई", "search_query": "shocked person screen night"},
+            {"caption": "मालिक कोई डॉन नहीं", "search_query": "criminal arrested police"},
+            {"caption": "आम सा लड़का रॉस था!", "search_query": "young man hoodie laptop"},
+            {"caption": "रहस्य जानने के लिए", "search_query": "dark abandoned street night"},
+            {"caption": "अभी सब्सक्राइब करें", "search_query": "cyber security digital lock"}
         ]
     }
 ]
@@ -144,10 +143,9 @@ def get_viral_script():
     print("🧠 AI से सटीक विजुअल्स वाली कहानी लिखी जा रही है...", flush=True)
     selected_theme = random.choice(MYSTERY_TOPICS)
     
-    # प्रॉम्प्ट में AI की नकेल कसी गई है: "सिर्फ GUARANTEED_DARK_VISUALS में से ही कीवर्ड चुनो"
-    allowed_list_str = ", ".join([f"'{k}'" for k in GUARANTEED_DARK_VISUALS])
+    allowed_list_str = ", ".join([f"'{k}'" for k in STRICT_VISUALS])
     
-    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. Rule 1: Shocking hook in first 3 seconds. Rule 2: NEVER leave a mystery incomplete. Name the real culprit/fact. Rule 3: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. Rule 4: 'scenes' is an array of objects. Each object has 'caption' (Hindi) and 'search_query'. CRITICAL: 'search_query' MUST be picked EXACTLY from this list and nowhere else: [{allowed_list_str}]. Do not invent queries."
+    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. Rule 1: Shocking hook in first 3 seconds. Rule 2: NEVER leave a mystery incomplete. Name the real culprit/fact (e.g. Ross Ulbricht). Rule 3: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. Rule 4: 'scenes' is an array of objects. Each object has 'caption' (Hindi) and 'search_query'. CRITICAL: 'search_query' MUST be picked EXACTLY from this list and nowhere else: [{allowed_list_str}]. Do not invent queries."
     
     for _ in range(3):
         try:
@@ -161,8 +159,8 @@ def get_viral_script():
             # विजुअल वैलिडेशन: अगर AI ने लिस्ट से बाहर का कीवर्ड दिया, तो हम उसे बदल देंगे
             if "scenes" in data:
                 for scene in data["scenes"]:
-                    if scene.get("search_query") not in GUARANTEED_DARK_VISUALS:
-                        scene["search_query"] = random.choice(GUARANTEED_DARK_VISUALS)
+                    if scene.get("search_query") not in STRICT_VISUALS:
+                        scene["search_query"] = random.choice(STRICT_VISUALS)
                         
             if isinstance(data, dict) and "script" in data and "scenes" in data:
                 return data
@@ -170,13 +168,13 @@ def get_viral_script():
     
     return random.choice(FALLBACK_SCRIPTS)
 
-# --- 6. 🎧 सस्पेंस डॉक्यूमेंट्री वाली आवाज़ (Rate -20%, Pitch -10Hz) ---
+# --- 6. 🎧 थ्रिलर डॉक्युमेंट्री आवाज़ (Rate -15%, Pitch -12Hz) ---
 async def generate_audio(text):
     print("🎙️ थ्रिलर डॉक्युमेंट्री जैसी आवाज़ तैयार हो रही है...", flush=True)
     for _ in range(3):
         try:
-            # आवाज़ को और भारी और धीमा किया गया है ताकि इंसानी इमोशन (सस्पेंस) फील हो
-            communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-20%", pitch="-10Hz")
+            # सस्पेंस और गंभीरता के लिए पिच को और भारी किया गया है
+            communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-15%", pitch="-12Hz")
             await communicate.save("voice.mp3")
             main_audio = AudioFileClip("voice.mp3")
             if os.path.exists("bgm.mp3"):
@@ -218,9 +216,9 @@ def fetch_stock_video(duration, clip_index, search_query):
     errors = []
     print(f"🔍 सीन {clip_index} के लिए ढूँढ रहे हैं: '{search_query}'", flush=True)
     
-    # अगर Pexels न चले, तो Pixabay के लिए छोटा कीवर्ड
+    # अगर Pexels न चले, तो Pixabay के लिए बैकअप कीवर्ड्स
     fallback_query = search_query.split(" ")[0] + " " + search_query.split(" ")[1] if len(search_query.split(" ")) > 1 else search_query
-    keywords_to_try = [search_query, fallback_query, random.choice(GUARANTEED_DARK_VISUALS)]
+    keywords_to_try = [search_query, fallback_query, random.choice(STRICT_VISUALS)]
     
     for keyword in keywords_to_try:
         for attempt in range(2):
@@ -271,7 +269,7 @@ def create_subtitle_clip(text, duration, clip_index):
     if not os.path.exists(font_path):
         try: urllib.request.urlretrieve("https://raw.githubusercontent.com/google/fonts/main/ofl/yantramanav/Yantramanav-Black.ttf", font_path)
         except: pass
-    try: font = ImageFont.truetype(font_path, 160) # फॉन्ट और भी बड़ा और बोल्ड किया है
+    try: font = ImageFont.truetype(font_path, 170) # फॉन्ट साइज़ बढ़ा दिया गया है
     except: font = ImageFont.load_default()
         
     wrapped = textwrap.fill(text, width=12)
@@ -281,8 +279,8 @@ def create_subtitle_clip(text, duration, clip_index):
     # कैप्शंस को स्क्रीन के बिल्कुल बीच (Center) में रखा है
     y = int(canvas_h * 0.50) - (bbox[3] - bbox[1]) // 2 
     
-    # चमकदार पीला (Neon Yellow) और गाढ़ा काला स्ट्रोक (Black Outline)
-    draw.multiline_text((x, y), wrapped, font=font, fill="#FFFF00", stroke_width=20, stroke_fill="#000000", align='center')
+    # चमकदार पीला (Neon Yellow) और गाढ़ा लाल (Dark Red) स्ट्रोक
+    draw.multiline_text((x, y), wrapped, font=font, fill="#FFFF00", stroke_width=22, stroke_fill="#8B0000", align='center')
     
     temp_name = f"cap_{clip_index}_{random.randint(1000,9999)}.png"
     img.save(temp_name)
@@ -290,7 +288,7 @@ def create_subtitle_clip(text, duration, clip_index):
 
 # --- 10. वीडियो कंपाइलेशन ---
 def compile_final_video(scenes, final_audio, audio_duration):
-    print("🎞️ विजुअल सिंक के साथ एडिटिंग शुरू हो रही है...", flush=True)
+    print("🎞️ विजुअल सिंक के साथ 4K एडिटिंग शुरू हो रही है...", flush=True)
     total_duration = audio_duration + 2.0 
     clip_duration = total_duration / len(scenes) 
     processed_clips = []
@@ -298,9 +296,9 @@ def compile_final_video(scenes, final_audio, audio_duration):
     for idx, scene in enumerate(scenes):
         cap_text = scene.get("caption", "")
         # अगर AI कोई फालतू कीवर्ड दे दे, तो भी हमारी डिक्शनरी उसे बचा लेगी
-        search_query = scene.get("search_query", random.choice(GUARANTEED_DARK_VISUALS))
-        if search_query not in GUARANTEED_DARK_VISUALS:
-            search_query = random.choice(GUARANTEED_DARK_VISUALS)
+        search_query = scene.get("search_query", random.choice(STRICT_VISUALS))
+        if search_query not in STRICT_VISUALS:
+            search_query = random.choice(STRICT_VISUALS)
             
         base_clip = fetch_stock_video(clip_duration, idx, search_query)
         
@@ -346,7 +344,7 @@ if __name__ == "__main__":
         final_video = compile_final_video(safe_scenes, final_audio, audio_duration)
         video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
         
-        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (No Toy Cars, Perfect Sync)</b>\n🎬 {safe_title}\n🔗 {video_url}")
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Perfect True Crime Sync)</b>\n🎬 {safe_title}\n🔗 {video_url}")
         print("🎉 सफलता! 100% सटीक विजुअल वाला वीडियो लाइव हो गया।", flush=True)
         
     except Exception as e:
