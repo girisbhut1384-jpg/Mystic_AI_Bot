@@ -31,10 +31,9 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# हिंदी टेक्स्ट को क्रैश होने से बचाने के लिए
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# --- 1. API क्रेडेंशियल्स (सख्त सफाई) ---
+# --- 1. API क्रेडेंशियल्स ---
 def clean_key(k):
     return k.strip().replace(" ", "").replace("\n", "") if k else ""
 
@@ -75,23 +74,18 @@ def verify_all_systems():
     send_telegram_report(report)
     return is_youtube_ok
 
-# --- 2. 🧹 फ्लॉप वीडियो क्लीनर (7 दिन, 100 व्यूज से कम) + Safety Shield ---
+# --- 2. 🧹 फ्लॉप वीडियो क्लीनर (7 दिन, 100 व्यूज से कम) ---
 def clean_low_performing_videos():
-    print("🧹 पुराने फ्लॉप वीडियो को स्कैन कर रहे हैं...", flush=True)
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
         youtube = build("youtube", "v3", credentials=creds)
         deleted_count = 0
         response = youtube.channels().list(part="contentDetails", mine=True).execute()
+        if not response.get('items'): return
         
-        # Safety Shield: अगर चैनल पर कोई प्लेलिस्ट न हो
-        if not response.get('items'):
-            return
-            
         uploads_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
         playlist_res = youtube.playlistItems().list(part="snippet", playlistId=uploads_id, maxResults=50).execute()
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        
         for item in playlist_res.get('items', []):
             vid_id = item['snippet']['resourceId']['videoId']
             pub_at = datetime.fromisoformat(item['snippet']['publishedAt'].replace('Z', '+00:00'))
@@ -101,73 +95,59 @@ def clean_low_performing_videos():
                     youtube.videos().delete(id=vid_id).execute()
                     deleted_count += 1
                     time.sleep(1)
-        if deleted_count > 0:
-            send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो हटाए गए।")
-    except Exception as e: 
-        print(f"⚠️ क्लीनअप में छोटी दिक्कत: {e}", flush=True)
+    except: pass
 
-# --- 3. 🚀 नई 15 मिस्ट्री कैटेगरी (No More Repetition) ---
-MYSTERY_CATEGORIES = [
-    "Cicada 3301 unsolved internet puzzle",
-    "The Max Headroom Incident TV hack",
-    "Mt. Gox Crypto Heist billion dollar",
-    "KGB Secrets Soviet union spies",
-    "Bermuda Triangle of Space satellite anomaly",
-    "Dark Web Red Rooms myth or reality",
-    "Edward Snowden NSA leaks reality",
-    "Stuxnet virus destroying nuclear plants",
-    "Anonymous hacker group biggest attacks",
-    "Mariana Web and quantum computing",
-    "Satoshi Nakamoto Bitcoin creator mystery",
-    "Creepy AI and chatbot incidents",
-    "Government secret files leaked online",
-    "Mysterious websites that suddenly disappeared",
-    "Real stories of digital identity theft"
-]
-
-# --- 4. 🎥 सख्त 25 डार्क विजुअल्स की डिक्शनरी ---
-STRICT_DARK_VISUALS = [
-    "cyberpunk hacker room", "abandoned server farm", "glowing neon code",
-    "fbi tactical raid", "true crime documentary style", "dark police flashing lights",
-    "hacker typing dark room", "secret confidential files document",
-    "cyber security digital lock", "abstract glowing network data",
-    "creepy artificial intelligence eye", "digital fingerprint scan dark",
-    "hooded hacker coding dark", "dark abandoned street night",
-    "police investigating crime scene", "dark deep web mystery",
-    "matrix code glowing", "anonymous hacker mask shadow",
-    "server room blinking lights", "dark underwater abyss",
-    "classified top secret folder", "satellite space anomaly dark",
-    "soviet kgb spy files", "creepy static tv screen", "bitcoin crypto heist dark"
-]
+# --- 3. 🚀 कंटेक्स्ट-टू-वीडियो डोमेन इंजन (Context-to-Video Engine) ---
+# अब मशीन जिस विषय की कहानी चुनेगी, सिर्फ उसी विषय के सटीक विजुअल्स का इस्तेमाल करेगी
+DOMAINS = {
+    "SPACE": {
+        "topics": ["Bermuda Triangle of Space satellite anomaly", "Black Knight Satellite mystery", "NASA secret space transmissions"],
+        "visuals": ["cinematic 4k satellite deep space", "NASA control room scientists looking stressed", "glowing galaxy black hole mystery", "meteorite falling space night", "international space station orbit dark"]
+    },
+    "CYBER": {
+        "topics": ["Silk Road Ross Ulbricht FBI raid", "Mt. Gox Crypto Heist billion dollar", "Anonymous hacker group biggest attacks", "Stuxnet virus destroying nuclear plants"],
+        "visuals": ["glowing digital black market interface", "FBI agents tactical gear breaking door", "normal college student hoodie laptop quiet room", "abstract green digital code hacking", "cyber security digital lock"]
+    },
+    "GOVERNMENT": {
+        "topics": ["KGB Secrets Soviet union spies", "Edward Snowden NSA leaks reality", "Government secret files leaked online"],
+        "visuals": ["classified top secret folder", "soviet kgb spy files", "police investigating crime scene night", "abandoned dark government building", "detective board strings mystery"]
+    },
+    "MYSTERY": {
+        "topics": ["Cicada 3301 unsolved internet puzzle", "Dark Web Red Rooms myth or reality", "Creepy AI and chatbot incidents", "Mysterious websites that suddenly disappeared"],
+        "visuals": ["creepy artificial intelligence eye glowing", "dark deep web mystery iceberg", "dark abandoned server farm", "creepy static tv screen noise", "hacker typing dark room"]
+    }
+}
 
 FALLBACK_SCRIPTS = [
     {
-        "title": "अंतरिक्ष का रहस्यमयी कोना! 😱 #shorts",
-        "description": "स्पेस का बरमूडा ट्राएंगल। #SpaceMystery #NASA #InternetMystery #shorts",
-        "tags": ["SpaceMystery", "NASA", "InternetMystery", "shorts"],
-        "script": "क्या आपको पता है, अंतरिक्ष में एक ऐसी जगह है, जहाँ से गुज़रते ही सैटेलाइट काम करना बंद कर देते हैं। इसे स्पेस का बरमूडा ट्राएंगल कहा जाता है। हबल टेलीस्कोप से लेकर इंटरनेशनल स्पेस स्टेशन तक, जब भी इस इलाके से गुज़रते हैं, तो उनके कैमरे और सिस्टम क्रैश हो जाते हैं। नासा आज तक इसका सटीक कारण नहीं बता पाया है। ऐसे ही डरावने रहस्य जानने के लिए चैनल सब्सक्राइब करें, क्योंकि यही असली वजह है कि...",
+        "title": "सिल्क रोड का खौफनाक सच! 😱 #shorts",
+        "description": "डार्क वेब का असली सच। #DarkWebHindi #SilkRoad #InternetMystery",
+        "tags": ["DarkWebHindi", "SilkRoad", "InternetMystery", "shorts"],
+        "script": "क्या आपको पता है, डार्क वेब पर एक ऐसा बाज़ार था, जिसका नाम था सिल्क रोड। यहाँ हथियारों से लेकर हैकर्स तक की बोली लगती थी। जब FBI ने यहाँ छापा मारा, तो दुनिया हिल गई। क्योंकि इस काले साम्राज्य का मालिक कोई डॉन नहीं, बल्कि रॉस उलब्रिच्ट नाम का एक आम सा कॉलेज का लड़का था! ऐसे ही डरावने रहस्य जानने के लिए चैनल सब्सक्राइब करें, क्योंकि यही असली वजह है कि...",
         "scenes": [
-            {"caption": "क्या आपको पता है?", "search_query": "satellite space anomaly dark"},
-            {"caption": "अंतरिक्ष की रहस्यमयी जगह", "search_query": "dark underwater abyss"},
-            {"caption": "सैटेलाइट हो जाते हैं बंद", "search_query": "creepy static tv screen"},
-            {"caption": "स्पेस का बरमूडा ट्राएंगल", "search_query": "abstract glowing network data"},
-            {"caption": "हबल टेलीस्कोप क्रैश", "search_query": "server room blinking lights"},
-            {"caption": "सिस्टम हो जाते हैं फेल", "search_query": "glowing neon code"},
-            {"caption": "नासा भी है हैरान", "search_query": "classified top secret folder"},
-            {"caption": "कारण कोई नहीं जानता", "search_query": "dark deep web mystery"},
+            {"caption": "क्या आपको पता है?", "search_query": "hacker typing dark room"},
+            {"caption": "डार्क वेब का बाज़ार", "search_query": "glowing digital black market interface"},
+            {"caption": "नाम था सिल्क रोड", "search_query": "abstract green digital code hacking"},
+            {"caption": "हथियारों की बोली", "search_query": "classified top secret folder"},
+            {"caption": "FBI का खतरनाक छापा", "search_query": "FBI agents tactical gear breaking door"},
+            {"caption": "दुनिया हिल गई", "search_query": "NASA control room scientists looking stressed"},
+            {"caption": "मालिक कोई डॉन नहीं", "search_query": "police investigating crime scene night"},
+            {"caption": "आम सा लड़का रॉस था!", "search_query": "normal college student hoodie laptop quiet room"},
             {"caption": "रहस्य जानने के लिए", "search_query": "cyber security digital lock"},
-            {"caption": "क्योंकि यही असली वजह है कि...", "search_query": "matrix code glowing"}
+            {"caption": "क्योंकि यही असली वजह है कि...", "search_query": "dark deep web mystery iceberg"}
         ]
     }
 ]
 
+# AI को जिस डोमेन की कहानी मिलेगी, विजुअल्स सिर्फ उसी डोमेन के होंगे
 def get_viral_script():
-    print("🧠 AI से नई लूपिंग कहानी लिखी जा रही है...", flush=True)
-    selected_theme = random.choice(MYSTERY_CATEGORIES)
-    allowed_list_str = ", ".join([f"'{k}'" for k in STRICT_DARK_VISUALS])
+    print("🧠 AI से कंटेक्स्ट-आधारित नई लूपिंग कहानी लिखी जा रही है...", flush=True)
+    domain_name = random.choice(list(DOMAINS.keys()))
+    selected_theme = random.choice(DOMAINS[domain_name]["topics"])
+    allowed_visuals = DOMAINS[domain_name]["visuals"]
+    allowed_list_str = ", ".join([f"'{k}'" for k in allowed_visuals])
     
-    # AI को सख़्त निर्देश: परफेक्ट लूप, सही पूर्णविराम/कोमा, और पूरी कहानी
-    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. CRITICAL RULE 1: PERFECT LOOP. Must start with 'क्या आपको पता है...' and end EXACTLY with '...सब्सक्राइब करें, क्योंकि यही असली वजह है कि...'. CRITICAL RULE 2: Complete the story. Provide the real conclusion/truth, DO NOT leave it half-baked. CRITICAL RULE 3: Use proper punctuation (commas and periods) so the voiceover has natural dramatic pauses. CRITICAL RULE 4: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. CRITICAL RULE 5: 'scenes' array 'search_query' MUST be EXACTLY from this list: [{allowed_list_str}]."
+    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. CRITICAL RULE 1: PERFECT LOOP. Must start with 'क्या आपको पता है...' and end EXACTLY with '...सब्सक्राइब करें, क्योंकि यही असली वजह है कि...'. CRITICAL RULE 2: Complete the story (reveal the truth/culprit). CRITICAL RULE 3: Use commas and periods for dramatic pauses. CRITICAL RULE 4: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. CRITICAL RULE 5: 'scenes' array 'search_query' MUST be EXACTLY from this list: [{allowed_list_str}]."
     
     for _ in range(3):
         try:
@@ -178,23 +158,24 @@ def get_viral_script():
                 content = content[content.find("{"):content.rfind("}")+1]
             data = json.loads(content)
             
-            # विजुअल वैलिडेशन: 100% सुनिश्चित करना कि कीवर्ड लिस्ट में से ही हो
+            # विजुअल वैलिडेशन: अगर कीवर्ड डोमेन लिस्ट में नहीं है तो बदल दो
             if "scenes" in data:
                 for scene in data["scenes"]:
-                    if scene.get("search_query") not in STRICT_DARK_VISUALS:
-                        scene["search_query"] = random.choice(STRICT_DARK_VISUALS)
+                    if scene.get("search_query") not in allowed_visuals:
+                        scene["search_query"] = random.choice(allowed_visuals)
                         
             if isinstance(data, dict) and "script" in data and "scenes" in data:
-                return data
+                return data, allowed_visuals
         except: time.sleep(2)
-    return random.choice(FALLBACK_SCRIPTS)
+    return random.choice(FALLBACK_SCRIPTS), DOMAINS["CYBER"]["visuals"]
 
-# --- 5. 🎧 ट्रू क्राइम सस्पेंस आवाज़ (Pitch -5Hz, Pacing Fixed) ---
+# --- 4. 🎧 खौफनाक ट्रू क्राइम आवाज़ (Pitch -15Hz, Rate -20%) ---
 async def generate_audio(text):
-    print("🎙️ ट्रू क्राइम डॉक्युमेंट्री आवाज़ (विराम के साथ) तैयार हो रही है...", flush=True)
+    print("🎙️ डॉक्युमेंट्री/हॉरर सस्पेंस आवाज़ तैयार हो रही है...", flush=True)
     for _ in range(3):
         try:
-            communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-10%", pitch="-5Hz")
+            # सस्पेंस को बहुत गहरा करने के लिए पैरामीटर्स एक्सट्रीम सेट किये गए हैं
+            communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-20%", pitch="-15Hz")
             await communicate.save("voice.mp3")
             main_audio = AudioFileClip("voice.mp3")
             if os.path.exists("bgm.mp3"):
@@ -230,8 +211,14 @@ def smart_crop_to_916(clip):
         clip = clip.resize(width=1080)
         return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
 
-# --- 6. 🛡️ द अल्टीमेट विजुअल फिल्टर (Anti-Garbage) + Smart Trimming ---
-BLACKLIST_WORDS = ["toy", "jellyfish", "football", "soccer", "dance", "dancing", "party", "girl", "kid", "child", "baby", "game", "playing", "abstract", "background", "texture", "happy", "smiling", "sunny"]
+# --- 5. 🛡️ द अल्टीमेट नेगेटिव कीवर्ड फिल्टर (Anti-Garbage v2) ---
+# अब ऑफिस वर्कर, गेमर, 3D चश्मे, और फुटबॉल कभी नहीं आएंगे
+BLACKLIST_WORDS = [
+    "toy", "jellyfish", "football", "soccer", "dance", "dancing", "party", 
+    "girl", "kid", "child", "baby", "game", "playing", "abstract", "texture", 
+    "happy", "smiling", "sunny", "office", "worker", "corridor", "3d glasses",
+    "mask", "guy fawkes", "cartoon", "animation", "women working", "laughing"
+]
 
 def is_video_valid(video_data):
     video_text = str(video_data).lower()
@@ -240,12 +227,13 @@ def is_video_valid(video_data):
             return False
     return True
 
-def fetch_stock_video(duration, clip_index, search_query):
+# --- 6. 🎥 सटीक 4K सिनेमैटिक विजुअल्स (डोमेन के हिसाब से) ---
+def fetch_stock_video(duration, clip_index, search_query, allowed_visuals):
     errors = []
-    print(f"🔍 सीन {clip_index} के लिए ढूँढ रहे हैं (विजुअल फिल्टर ऑन): '{search_query}'", flush=True)
+    print(f"🔍 सीन {clip_index} के लिए ढूँढ रहे हैं (नेगेटिव फिल्टर ऑन): '{search_query}'", flush=True)
     
     fallback_query = search_query.split(" ")[0] + " " + search_query.split(" ")[1] if len(search_query.split(" ")) > 1 else search_query
-    keywords_to_try = [search_query, fallback_query, random.choice(STRICT_DARK_VISUALS)]
+    keywords_to_try = [search_query, fallback_query, random.choice(allowed_visuals)]
     
     for keyword in keywords_to_try:
         for attempt in range(3):
@@ -255,13 +243,12 @@ def fetch_stock_video(duration, clip_index, search_query):
                 url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={page}&orientation=portrait"
                 res = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=10)
                 if res.status_code == 200 and res.json().get("videos"):
-                    # 4K/HD गारंटी
                     sorted_videos = sorted(res.json()["videos"], key=lambda x: x['width'] * x['height'], reverse=True)
                     for vid in sorted_videos:
                         if is_video_valid(vid):
                             video_url = vid["video_files"][0]["link"]
                             break
-            except Exception as e: errors.append(f"Pexels Error: {e}")
+            except Exception as e: errors.append(f"Pexels: {e}")
 
             if not video_url and PIXABAY_API_KEY:
                 try:
@@ -272,7 +259,7 @@ def fetch_stock_video(duration, clip_index, search_query):
                             if is_video_valid(vid):
                                 video_url = vid["videos"].get("large", vid["videos"].get("medium"))["url"]
                                 break
-                except Exception as e: errors.append(f"Pixabay Error: {e}")
+                except Exception as e: errors.append(f"Pixabay: {e}")
 
             if video_url:
                 temp_name = f"temp_vid_{clip_index}_{attempt}.mp4"
@@ -282,7 +269,7 @@ def fetch_stock_video(duration, clip_index, search_query):
                         if getattr(clip, 'duration', None) is None or clip.duration <= 2.0:
                             raise Exception("वीडियो बहुत छोटा है")
                             
-                        # Smart Trimming: शुरुआती 1.5 सेकंड (कचरा/ब्लैक स्क्रीन) काटना
+                        # Smart Trimming
                         safe_start = 1.5
                         if clip.duration > duration + safe_start:
                             start_time = random.uniform(safe_start, clip.duration - duration)
@@ -295,9 +282,9 @@ def fetch_stock_video(duration, clip_index, search_query):
                         return clip.set_duration(duration)
                     except Exception as e:
                         errors.append(f"Crop Error: {e}")
-    raise Exception("सटीक वीडियो नहीं मिल पाया (सभी फिल्टर फेल)।")
+    raise Exception("सटीक वीडियो नहीं मिल पाया (ब्लैकलिस्ट की वजह से रिजेक्ट)।")
 
-# --- 7. साफ़ सफेद कैप्शंस (काले स्ट्रोक के साथ) ---
+# --- 7. डायनामिक कैप्शंस (सफ़ेद टेक्स्ट, लाल/काला बैकग्राउंड) ---
 def create_subtitle_clip(text, duration, clip_index):
     canvas_w, canvas_h = 1080, 1920
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -314,27 +301,27 @@ def create_subtitle_clip(text, duration, clip_index):
     x = (canvas_w - (bbox[2] - bbox[0])) // 2
     y = int(canvas_h * 0.50) - (bbox[3] - bbox[1]) // 2 
     
-    # सफ़ेद टेक्स्ट और गाढ़ा काला स्ट्रोक (पढ़ने में बहुत आसान)
+    # सफ़ेद टेक्स्ट और गाढ़ा काला स्ट्रोक (पढ़ने में आसान)
     draw.multiline_text((x, y), wrapped, font=font, fill="#FFFFFF", stroke_width=20, stroke_fill="#000000", align='center')
     
     temp_name = f"cap_{clip_index}_{random.randint(1000,9999)}.png"
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 8. वीडियो कंपाइलेशन (ज़ीरो क्रैश) ---
-def compile_final_video(scenes, final_audio, audio_duration):
-    print("🎞️ विजुअल फिल्टर के साथ 4K एडिटिंग शुरू हो रही है...", flush=True)
-    total_duration = audio_duration + 1.0 # लूपिंग के लिए बफर
+# --- 8. वीडियो कंपाइलेशन ---
+def compile_final_video(scenes, final_audio, audio_duration, allowed_visuals):
+    print("🎞️ कंटेक्स्ट-अवेयर 4K एडिटिंग शुरू हो रही है...", flush=True)
+    total_duration = audio_duration + 1.0 
     clip_duration = total_duration / len(scenes) 
     processed_clips = []
     
     for idx, scene in enumerate(scenes):
         cap_text = scene.get("caption", "")
-        search_query = scene.get("search_query", random.choice(STRICT_DARK_VISUALS))
-        if search_query not in STRICT_DARK_VISUALS:
-            search_query = random.choice(STRICT_DARK_VISUALS)
+        search_query = scene.get("search_query", random.choice(allowed_visuals))
+        if search_query not in allowed_visuals:
+            search_query = random.choice(allowed_visuals)
             
-        base_clip = fetch_stock_video(clip_duration, idx, search_query)
+        base_clip = fetch_stock_video(clip_duration, idx, search_query, allowed_visuals)
         
         if cap_text.strip():
             txt_clip = create_subtitle_clip(cap_text, clip_duration, idx)
@@ -362,12 +349,12 @@ def upload_video(video_file, title, description, tags):
 if __name__ == "__main__":
     try:
         if not verify_all_systems():
-            send_telegram_report("🚨 <b>मशीन बंद:</b> YouTube टोकन एक्सपायर हो गया है। कृपया नया टोकन अपडेट करें।", is_error=True)
+            send_telegram_report("🚨 <b>मशीन बंद:</b> YouTube टोकन एक्सपायर हो गया है।", is_error=True)
             sys.exit(1)
             
         clean_low_performing_videos()
         
-        data = get_viral_script()
+        data, allowed_visuals = get_viral_script()
         safe_script = data.get("script", FALLBACK_SCRIPTS[0]["script"])
         safe_scenes = data.get("scenes", FALLBACK_SCRIPTS[0]["scenes"])
         safe_title = data.get("title", FALLBACK_SCRIPTS[0]["title"])
@@ -375,11 +362,11 @@ if __name__ == "__main__":
         safe_tags = data.get("tags", FALLBACK_SCRIPTS[0]["tags"])
         
         final_audio, audio_duration = asyncio.run(generate_audio(safe_script))
-        final_video = compile_final_video(safe_scenes, final_audio, audio_duration)
+        final_video = compile_final_video(safe_scenes, final_audio, audio_duration, allowed_visuals)
         video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
         
-        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Ultimate Perfection)</b>\n🎬 {safe_title}\n🔗 {video_url}")
-        print("🎉 सफलता! 100% सटीक और फिल्टर किया हुआ वीडियो लाइव हो गया।", flush=True)
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Context-to-Video Engine Active)</b>\n🎬 {safe_title}\n🔗 {video_url}")
+        print("🎉 सफलता! 100% परफेक्ट वीडियो लाइव हो गया।", flush=True)
         
     except Exception as e:
         error_details = str(traceback.format_exc())
