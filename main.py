@@ -23,9 +23,10 @@ except:
 # ==========================================
 
 from moviepy.editor import (
-    AudioFileClip, ImageClip, 
+    AudioFileClip, VideoFileClip, ImageClip, 
     CompositeVideoClip, CompositeAudioClip, concatenate_videoclips
 )
+from moviepy.audio.fx.all import audio_loop, audio_fadeout
 import edge_tts
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -41,11 +42,12 @@ def clean_key(k):
 CLIENT_ID = clean_key(os.environ.get("CLIENT_ID"))
 CLIENT_SECRET = clean_key(os.environ.get("CLIENT_SECRET"))
 REFRESH_TOKEN = clean_key(os.environ.get("REFRESH_TOKEN"))
+PEXELS_API_KEY = clean_key(os.environ.get("PEXELS_API_KEY"))
+PIXABAY_API_KEY = clean_key(os.environ.get("PIXABAY_API_KEY"))
 TELEGRAM_BOT_TOKEN = clean_key(os.environ.get("TELEGRAM_BOT_TOKEN"))
 TELEGRAM_CHAT_ID = clean_key(os.environ.get("TELEGRAM_CHAT_ID"))
 
-# Pexels/Pixabay अब अनिवार्य नहीं हैं, लेकिन अगर हैं तो रहने दें
-if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
+if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
     print("❌ एरर: GitHub Secrets में API Keys गायब हैं!")
     sys.exit(1)
 
@@ -72,7 +74,8 @@ def verify_all_systems():
         is_youtube_ok = True
     except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है!\n"
     
-    report += "✅ <b>AI Image Engine:</b> Pollinations.ai (100% Free) एक्टिव है।"
+    report += "✅ <b>Video Engine:</b> Pexels/Pixabay 4K एक्टिव है।\n"
+    report += "✅ <b>Music Engine:</b> bg_music फोल्डर रेडी है।"
     send_telegram_report(report)
     return is_youtube_ok
 
@@ -116,40 +119,34 @@ def save_used_topic(topic):
             f.write(topic + "\n")
     except: pass
 
+# 15 अनसुलझे रहस्य (No Repetition)
 MYSTERY_CATEGORIES = [
-    "Cicada 3301 unsolved internet puzzle",
-    "The Max Headroom Incident TV hack",
-    "Mt. Gox Crypto Heist billion dollar",
-    "KGB Secrets Soviet union spies",
-    "Bermuda Triangle of Space satellite anomaly",
-    "Dark Web Red Rooms myth or reality",
-    "Edward Snowden NSA leaks reality",
-    "Stuxnet virus destroying nuclear plants",
-    "Anonymous hacker group biggest attacks",
-    "Mariana Web and quantum computing",
-    "Satoshi Nakamoto Bitcoin creator mystery",
-    "Creepy AI and chatbot incidents",
-    "Government secret files leaked online",
-    "Mysterious websites that suddenly disappeared",
-    "Real stories of digital identity theft"
+    "Cicada 3301 unsolved internet puzzle", "The Max Headroom Incident TV hack",
+    "Mt. Gox Crypto Heist billion dollar", "KGB Secrets Soviet union spies",
+    "Bermuda Triangle of Space satellite anomaly", "Dark Web Red Rooms myth",
+    "Edward Snowden NSA leaks reality", "Stuxnet virus destroying nuclear plants",
+    "Anonymous hacker group biggest attacks", "Mariana Web and quantum computing",
+    "Satoshi Nakamoto Bitcoin creator mystery", "Creepy AI and chatbot incidents",
+    "Government secret files leaked online", "Real stories of digital identity theft",
+    "Mysterious deep ocean anomalies"
 ]
 
 FALLBACK_SCRIPTS = {
-    "title": "सिल्क रोड का खौफनाक सच! 😱 #shorts",
-    "description": "डार्क वेब का असली सच। #DarkWebHindi #SilkRoad #InternetMystery",
-    "tags": ["DarkWebHindi", "SilkRoad", "InternetMystery", "shorts"],
-    "script": "क्या आपको पता है, डार्क वेब पर एक ऐसा बाज़ार था, जिसका नाम था सिल्क रोड। यहाँ हथियारों से लेकर हैकर्स तक की बोली लगती थी। जब FBI ने यहाँ छापा मारा, तो दुनिया हिल गई। क्योंकि इस काले साम्राज्य का मालिक कोई डॉन नहीं, बल्कि रॉस उलब्रिच्ट नाम का एक आम सा कॉलेज का लड़का था! ऐसे ही डरावने रहस्य जानने के लिए चैनल सब्सक्राइब करें, क्योंकि यही असली वजह है कि...",
+    "title": "अंतरिक्ष का रहस्यमयी कोना! 😱 #shorts",
+    "description": "स्पेस का बरमूडा ट्राएंगल। #SpaceMystery #NASA #InternetMystery",
+    "tags": ["SpaceMystery", "NASA", "InternetMystery", "shorts"],
+    "script": "क्या आपको पता है, अंतरिक्ष में एक ऐसी जगह है, जहाँ से गुज़रते ही सैटेलाइट काम करना बंद कर देते हैं। इसे स्पेस का बरमूडा ट्राएंगल कहा जाता है। हबल टेलीस्कोप से लेकर इंटरनेशनल स्पेस स्टेशन तक, जब भी इस इलाके से गुज़रते हैं, तो उनके कैमरे और सिस्टम क्रैश हो जाते हैं। नासा आज तक इसका सटीक कारण नहीं बता पाया है। ऐसे ही डरावने रहस्य जानने के लिए चैनल सब्सक्राइब करें, क्योंकि यही असली वजह है कि...",
     "scenes": [
-        {"caption": "क्या आपको पता है?", "image_prompt": "Cinematic dark room with glowing hacker screens"},
-        {"caption": "डार्क वेब का बाज़ार", "image_prompt": "Abstract green digital glowing matrix code"},
-        {"caption": "नाम था सिल्क रोड", "image_prompt": "Deep underwater dark iceberg mystery"},
-        {"caption": "हथियारों की बोली", "image_prompt": "Top secret confidential files in a dark room"},
-        {"caption": "FBI का खतरनाक छापा", "image_prompt": "FBI tactical raid flashing police lights night"},
-        {"caption": "दुनिया हिल गई", "image_prompt": "NASA control room stressed scientists"},
-        {"caption": "मालिक कोई डॉन नहीं", "image_prompt": "Police investigating crime scene at night"},
-        {"caption": "आम सा लड़का रॉस था!", "image_prompt": "Normal young college student in hoodie working on laptop"},
-        {"caption": "रहस्य जानने के लिए", "image_prompt": "Cyber security glowing digital lock"},
-        {"caption": "क्योंकि यही असली वजह है कि...", "image_prompt": "Creepy glowing artificial intelligence eye"}
+        {"caption": "क्या आपको पता है?", "search_query": "satellite space anomaly dark"},
+        {"caption": "अंतरिक्ष की रहस्यमयी जगह", "search_query": "dark universe galaxy"},
+        {"caption": "सैटेलाइट हो जाते हैं बंद", "search_query": "creepy static tv screen"},
+        {"caption": "स्पेस का बरमूडा ट्राएंगल", "search_query": "abstract glowing network data"},
+        {"caption": "हबल टेलीस्कोप क्रैश", "search_query": "server room blinking lights"},
+        {"caption": "सिस्टम हो जाते हैं फेल", "search_query": "glowing neon code"},
+        {"caption": "नासा भी है हैरान", "search_query": "classified top secret folder"},
+        {"caption": "कारण कोई नहीं जानता", "search_query": "dark deep web mystery"},
+        {"caption": "रहस्य जानने के लिए", "search_query": "cyber security digital lock"},
+        {"caption": "क्योंकि यही असली वजह है कि...", "search_query": "matrix code glowing"}
     ]
 }
 
@@ -160,7 +157,7 @@ def get_viral_script():
     
     selected_theme = random.choice(MYSTERY_CATEGORIES)
     
-    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. Do NOT use these past topics: [{used_str}]. CRITICAL RULE 1: PERFECT LOOP. Must start with 'क्या आपको पता है...' and end EXACTLY with '...सब्सक्राइब करें, क्योंकि यही असली वजह है कि...'. CRITICAL RULE 2: Complete the story (reveal the truth). CRITICAL RULE 3: Use commas for dramatic pauses. CRITICAL RULE 4: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. CRITICAL RULE 5: 'scenes' array must have 'caption' (Hindi) and 'image_prompt' (Highly detailed English prompt for AI Image Generator, e.g. 'Cinematic 4K shot of FBI raiding a dark room'). DO NOT invent any other JSON structure."
+    prompt = f"Write a Hindi YouTube Shorts script about: '{selected_theme}'. Do NOT use these past topics: [{used_str}]. CRITICAL RULE 1: PERFECT LOOP. Must start with 'क्या आपको पता है...' and end EXACTLY with '...सब्सक्राइब करें, क्योंकि यही असली वजह है कि...'. CRITICAL RULE 2: Complete the story (reveal the truth). CRITICAL RULE 3: Use commas for dramatic pauses. CRITICAL RULE 4: Return ONLY valid JSON with keys: 'title', 'description', 'tags', 'script', and 'scenes'. CRITICAL RULE 5: 'scenes' array must have 'caption' (Hindi) and 'search_query' (English query for Pexels, e.g. 'hacker dark room', 'police flashing lights'). Do NOT use words like 'toy', 'girl', 'office', 'happy' in queries."
     
     for _ in range(3):
         try:
@@ -177,66 +174,138 @@ def get_viral_script():
         except: time.sleep(2)
     return FALLBACK_SCRIPTS
 
-# --- 4. 🎧 परफेक्ट डॉक्युमेंट्री आवाज़ ---
-async def generate_audio(text):
-    print("🎙️ ट्रू क्राइम डॉक्युमेंट्री आवाज़ (विराम के साथ) तैयार हो रही है...", flush=True)
+# --- 4. 🎧 परफेक्ट डॉक्युमेंट्री आवाज़ (-5Hz Pitch) ---
+async def generate_voiceover(text):
+    print("🎙️ ट्रू क्राइम डॉक्युमेंट्री आवाज़ तैयार हो रही है...", flush=True)
     for _ in range(3):
         try:
             communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-15%", pitch="-5Hz")
             await communicate.save("voice.mp3")
             main_audio = AudioFileClip("voice.mp3")
-            if os.path.exists("bgm.mp3"):
-                try:
-                    bg_audio = AudioFileClip("bgm.mp3").volumex(0.12)
-                    from moviepy.audio.fx.all import audio_loop
-                    bg_audio = audio_loop(bg_audio, duration=main_audio.duration)
-                    main_audio = CompositeAudioClip([main_audio, bg_audio])
-                except: pass
             return main_audio, main_audio.duration
         except: time.sleep(2)
     raise Exception("आवाज़ जनरेट नहीं हो पाई")
 
-# --- 5. 🎨 100% फ्री AI इमेज जनरेटर (Pollinations API) ---
-def generate_ai_image(prompt, filename):
-    # यह टूल फ्री में 4K लेवल की तस्वीरें बनाता है। nologo=true से वॉटरमार्क नहीं आएगा।
-    safe_prompt = urllib.parse.quote(prompt + ", dark cinematic lighting, highly realistic 8k")
-    url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1080&height=1920&nologo=true"
-    
-    headers = {"User-Agent": "Mozilla/5.0"}
+# --- 5. 🎵 रैंडम BGM सेलेक्टर ---
+def get_random_bgm():
+    bg_folder = "bg_music"
+    if os.path.exists(bg_folder):
+        tracks = [f for f in os.listdir(bg_folder) if f.endswith(('.mp3', '.wav'))]
+        if tracks:
+            return os.path.join(bg_folder, random.choice(tracks))
+    if os.path.exists("bgm.mp3"):
+        return "bgm.mp3"
+    return None
+
+# --- 6. 🛡️ द अल्टीमेट नेगेटिव कीवर्ड फिल्टर (Anti-Garbage v2) ---
+# यह लिस्ट सुनिश्चित करेगी कि वीडियो में कोई भी फालतू या अजीब दृश्य न आए
+BLACKLIST_WORDS = [
+    "toy", "jellyfish", "football", "soccer", "dance", "dancing", "party", 
+    "girl", "kid", "child", "baby", "game", "playing", "happy", "smiling", 
+    "sunny", "office", "worker", "corridor", "3d glasses", "animation", 
+    "cartoon", "laughing", "dog", "cat", "pet", "vacation"
+]
+
+def is_video_valid(video_data):
+    video_text = str(video_data).lower()
+    for word in BLACKLIST_WORDS:
+        if word in video_text:
+            return False
+    return True
+
+# 25 डार्क विजुअल्स का बैकअप (अगर AI का कीवर्ड फेल हो जाए)
+STRICT_DARK_VISUALS = [
+    "cyberpunk hacker room", "abandoned server farm", "glowing neon code",
+    "fbi tactical raid", "true crime documentary style", "dark police flashing lights",
+    "hacker typing dark room", "secret confidential files document",
+    "cyber security digital lock", "abstract glowing network data",
+    "digital fingerprint scan dark", "hooded hacker coding dark", 
+    "dark abandoned street night", "police investigating crime scene", 
+    "dark deep web mystery", "matrix code glowing", "server room blinking lights", 
+    "classified top secret folder", "satellite space anomaly dark", 
+    "creepy static tv screen", "bitcoin crypto heist dark"
+]
+
+def safe_download_video(url, filename):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
-        r = requests.get(url, headers=headers, timeout=30)
+        r = requests.get(url, stream=True, headers=headers, timeout=20)
         if r.status_code == 200:
             with open(filename, 'wb') as f:
-                f.write(r.content)
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk: f.write(chunk)
             return True
         return False
     except: return False
 
-# सिनेमैटिक ज़ूम इफ़ेक्ट (Ken Burns Effect)
-def apply_ken_burns_effect(image_path, duration):
-    # इमेज को हल्का सा ज़ूम करने का इफ़ेक्ट
-    clip = ImageClip(image_path).set_duration(duration)
-    # Resize function to simulate slow zoom in (Scale up from 1.0 to 1.05)
-    return clip.resize(lambda t: 1 + 0.05 * (t / duration)).set_position(('center', 'center'))
+def smart_crop_to_916(clip):
+    target_ratio = 1080 / 1920
+    clip_ratio = clip.w / clip.h
+    if clip_ratio > target_ratio:
+        clip = clip.resize(height=1920)
+        return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
+    else:
+        clip = clip.resize(width=1080)
+        return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
 
-def fetch_visual_clip(duration, clip_index, image_prompt):
-    print(f"🎨 सीन {clip_index} के लिए AI इमेज जनरेट हो रही है: '{image_prompt}'", flush=True)
-    img_name = f"ai_scene_{clip_index}.jpg"
+def fetch_visual_clip(duration, clip_index, search_query):
+    errors = []
+    print(f"🔍 सीन {clip_index} के लिए ढूँढ रहे हैं (नेगेटिव फिल्टर ऑन): '{search_query}'", flush=True)
     
-    for attempt in range(3):
-        if generate_ai_image(image_prompt, img_name):
+    fallback_query = search_query.split(" ")[0] + " " + search_query.split(" ")[1] if len(search_query.split(" ")) > 1 else search_query
+    keywords_to_try = [search_query, fallback_query, random.choice(STRICT_DARK_VISUALS)]
+    
+    for keyword in keywords_to_try:
+        for attempt in range(3):
+            video_url = None
             try:
-                # यहाँ हमने Ken Burns इफ़ेक्ट लगा दिया है ताकि इमेज वीडियो जैसी लगे!
-                clip = apply_ken_burns_effect(img_name, duration)
-                # स्क्रीन साइज़ पक्का करने के लिए क्रॉप
-                clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
-                return clip
-            except Exception as e:
-                print(f"Zoom Effect Error: {e}")
-                
-    raise Exception(f"AI इमेज जनरेट नहीं हो पाई: {image_prompt}")
+                page = random.randint(1, 2)
+                url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=15&page={page}&orientation=portrait"
+                res = requests.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=10)
+                if res.status_code == 200 and res.json().get("videos"):
+                    sorted_videos = sorted(res.json()["videos"], key=lambda x: x['width'] * x['height'], reverse=True)
+                    for vid in sorted_videos:
+                        if is_video_valid(vid):
+                            video_url = vid["video_files"][0]["link"]
+                            break
+            except Exception as e: errors.append(f"Pexels Error: {e}")
 
-# --- 6. 📝 पॉप-अप कैप्शंस (सफ़ेद टेक्स्ट, काले स्ट्रोक के साथ) ---
+            if not video_url and PIXABAY_API_KEY:
+                try:
+                    pix_url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={urllib.parse.quote(keyword)}&per_page=10"
+                    res = requests.get(pix_url, timeout=10)
+                    if res.status_code == 200 and res.json().get("hits"):
+                        for vid in res.json()["hits"]:
+                            if is_video_valid(vid):
+                                video_url = vid["videos"].get("large", vid["videos"].get("medium"))["url"]
+                                break
+                except Exception as e: errors.append(f"Pixabay Error: {e}")
+
+            if video_url:
+                temp_name = f"temp_vid_{clip_index}_{attempt}.mp4"
+                if safe_download_video(video_url, temp_name):
+                    try:
+                        clip = VideoFileClip(temp_name).without_audio()
+                        if getattr(clip, 'duration', None) is None or clip.duration <= 2.0:
+                            raise Exception("वीडियो बहुत छोटा है")
+                            
+                        # Smart Trimming: शुरुआती 1.5 सेकंड (कचरा/ब्लैक स्क्रीन) काटना
+                        safe_start = 1.5
+                        if clip.duration > duration + safe_start:
+                            start_time = random.uniform(safe_start, clip.duration - duration)
+                            clip = clip.subclip(start_time, start_time + duration)
+                        else:
+                            repeats = int(duration / clip.duration) + 1
+                            clip = concatenate_videoclips([clip] * repeats).subclip(0, duration)
+                            
+                        clip = smart_crop_to_916(clip)
+                        return clip.set_duration(duration)
+                    except Exception as e:
+                        errors.append(f"Crop Error: {e}")
+                        
+    return None # सेफ्टी लॉक के लिए None रिटर्न करेंगे
+
+# --- 7. 📝 पॉप-अप कैप्शंस (सफ़ेद टेक्स्ट, काले स्ट्रोक) ---
 def create_subtitle_clip(text, duration, clip_index):
     canvas_w, canvas_h = 1080, 1920
     img = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -259,35 +328,52 @@ def create_subtitle_clip(text, duration, clip_index):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 7. 🎬 वीडियो कंपाइलेशन ---
+# --- 8. 🎬 वीडियो कंपाइलेशन (Safety Lock + Audio Fade-out) ---
 def compile_final_video(scenes, final_audio, audio_duration):
-    print("🎞️ AI इमेजेस और Ken Burns इफ़ेक्ट के साथ 4K एडिटिंग शुरू...", flush=True)
+    print("🎞️ असली 4K वीडियो और म्यूजिक के साथ एडिटिंग शुरू...", flush=True)
     total_duration = audio_duration + 1.0 
     clip_duration = total_duration / len(scenes) 
     processed_clips = []
     
     for idx, scene in enumerate(scenes):
         cap_text = scene.get("caption", "")
-        # अब हम search_query की जगह image_prompt का इस्तेमाल करेंगे
-        image_prompt = scene.get("image_prompt", scene.get("search_query", "Dark dramatic true crime scene 4k cinematic"))
+        search_query = scene.get("search_query", random.choice(STRICT_DARK_VISUALS))
         
-        base_clip = fetch_visual_clip(clip_duration, idx, image_prompt)
+        base_clip = fetch_visual_clip(clip_duration, idx, search_query)
         
-        if cap_text.strip():
-            txt_clip = create_subtitle_clip(cap_text, clip_duration, idx)
-            comp = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920)).set_duration(clip_duration)
-            processed_clips.append(comp)
-        else:
-            processed_clips.append(base_clip)
+        if base_clip is not None:
+            if cap_text.strip():
+                txt_clip = create_subtitle_clip(cap_text, clip_duration, idx)
+                comp = CompositeVideoClip([base_clip, txt_clip], size=(1080, 1920)).set_duration(clip_duration)
+                processed_clips.append(comp)
+            else:
+                processed_clips.append(base_clip)
+                
+    # 🛑 THE IRON SHIELD: ब्लैक स्क्रीन सेफ्टी लॉक 🛑
+    if len(processed_clips) < 5:
+        print("⏳ असली वीडियो पूरे नहीं मिले, 2 मिनट बाद दोबारा कोशिश करेंगे...")
+        time.sleep(120)
+        raise Exception("सेफ्टी लॉक: 5 से कम वीडियो मिले हैं। ब्लैक स्क्रीन रेंडरिंग रोक दी गई है!")
             
     final_video = concatenate_videoclips(processed_clips, method="compose").set_duration(total_duration)
-    padded_audio = CompositeAudioClip([final_audio]).set_duration(total_duration)
-    final_video = final_video.set_audio(padded_audio)
+    
+    # 🎵 म्यूजिक मिक्सिंग और फेड-आउट (Fade-out)
+    bgm_path = get_random_bgm()
+    if bgm_path:
+        print(f"🎵 बैकग्राउंड म्यूजिक जोड़ा जा रहा है: {bgm_path}")
+        bg_audio = AudioFileClip(bgm_path).volumex(0.12)
+        bg_audio = audio_loop(bg_audio, duration=total_duration)
+        bg_audio = audio_fadeout(bg_audio, 2.0)
+        final_mixed_audio = CompositeAudioClip([final_audio, bg_audio]).set_duration(total_duration)
+    else:
+        final_mixed_audio = final_audio.set_duration(total_duration)
+        
+    final_video = final_video.set_audio(final_mixed_audio)
     
     final_video.write_videofile("final_viral_shorts.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return "final_viral_shorts.mp4"
 
-# --- 8. 📤 YouTube अपलोड ---
+# --- 9. 📤 YouTube अपलोड ---
 def upload_video(video_file, title, description, tags):
     print("📤 YouTube पर अपलोड हो रहा है...", flush=True)
     creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -312,14 +398,14 @@ if __name__ == "__main__":
         safe_desc = data.get("description", FALLBACK_SCRIPTS["description"])
         safe_tags = data.get("tags", FALLBACK_SCRIPTS["tags"])
         
-        final_audio, audio_duration = asyncio.run(generate_audio(safe_script))
+        final_audio, audio_duration = asyncio.run(generate_voiceover(safe_script))
         final_video = compile_final_video(safe_scenes, final_audio, audio_duration)
         video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
         
-        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (AI Image + Ken Burns Edition)</b>\n🎬 {safe_title}\n🔗 {video_url}")
-        print("🎉 सफलता! 100% सटीक AI विजुअल वाला वीडियो लाइव हो गया।", flush=True)
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Ultimate Pexels 4K + Music Edition)</b>\n🎬 {safe_title}\n🔗 {video_url}")
+        print("🎉 सफलता! 100% असली 4K विजुअल और म्यूजिक वाला वीडियो लाइव हो गया।", flush=True)
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        send_telegram_report(f"🚨 मशीन क्रैश:\n\n{error_details[-1500:]}", is_error=True)
+        send_telegram_report(f"🚨 मशीन क्रैश (लेकिन ब्लैक स्क्रीन से बची):\n\n{error_details[-1500:]}", is_error=True)
         sys.exit(1)
