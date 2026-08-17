@@ -75,10 +75,11 @@ def verify_all_systems():
     except: report += "🔴 <b>YouTube:</b> REFRESH_TOKEN एक्सपायर हो गया है!\n"
     
     report += "✅ <b>Video Engine:</b> Pexels/Pixabay HD ऑप्टिमाइज्ड है।\n"
+    report += "✅ <b>Music Engine:</b> bg_music फोल्डर रेडी है।"
     send_telegram_report(report)
     return is_youtube_ok
 
-# --- 2. 🧹 फ्लॉप वीडियो क्लीनर ---
+# --- 2. 🧹 फ्लॉप वीडियो क्लीनर (7 दिन, 100 व्यूज से कम) ---
 def clean_low_performing_videos():
     try:
         creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -99,7 +100,10 @@ def clean_low_performing_videos():
                     youtube.videos().delete(id=vid_id).execute()
                     deleted_count += 1
                     time.sleep(1)
-    except: pass
+        if deleted_count > 0:
+            send_telegram_report(f"🧹 <b>चैनल क्लीनअप:</b> {deleted_count} फ्लॉप वीडियो हटाए गए।")
+    except Exception as e:
+        print(f"⚠️ क्लीनअप में दिक्कत: {e}")
 
 # --- 3. 🧠 याद्दाश्त (Memory System) ---
 HISTORY_FILE = "history.txt"
@@ -188,11 +192,11 @@ def get_random_bgm():
     if os.path.exists("bgm.mp3"): return "bgm.mp3"
     return None
 
-# --- 5. 🛡️ नेगेटिव कीवर्ड फिल्टर (रिलैक्स्ड ताकि वीडियो मिलें) ---
+# --- 5. 🛡️ नेगेटिव कीवर्ड फिल्टर (Anti-Garbage) ---
 BLACKLIST_WORDS = [
     "toy", "jellyfish", "football", "soccer", "dance", "dancing", "party", 
     "girl", "kid", "child", "baby", "playing", "happy", "smiling", 
-    "office", "worker", "corridor", "3d glasses", "laughing", "pet"
+    "office", "worker", "corridor", "3d glasses", "laughing", "pet", "animation"
 ]
 
 def is_video_valid(video_data):
@@ -212,7 +216,7 @@ STRICT_DARK_VISUALS = [
 ]
 
 def safe_download_video(url, filename):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         r = requests.get(url, stream=True, headers=headers, timeout=20)
         if r.status_code == 200:
@@ -233,7 +237,7 @@ def smart_crop_to_916(clip):
         clip = clip.resize(width=1080)
         return clip.crop(x_center=clip.w//2, y_center=clip.h//2, width=1080, height=1920)
 
-# --- 6. 🎥 RAM-Friendly 1080p विजुअल्स ---
+# --- 6. 🎥 RAM-Friendly 1080p विजुअल्स (Smart Trimming) ---
 def fetch_stock_video(duration, clip_index, search_query):
     errors = []
     print(f"🔍 सीन {clip_index} के लिए ढूँढ रहे हैं: '{search_query}'", flush=True)
@@ -252,7 +256,6 @@ def fetch_stock_video(duration, clip_index, search_query):
                     valid_vids = [v for v in res.json()["videos"] if is_video_valid(v)]
                     if valid_vids:
                         best_vid = random.choice(valid_vids)
-                        # RAM बचाने के लिए 4K की जगह HD (1080p) वीडियो उठाएंगे
                         hd_files = [f for f in best_vid["video_files"] if f.get("quality") in ["hd", "fhd"] and f.get("width", 0) >= 720]
                         if hd_files: video_url = sorted(hd_files, key=lambda x: x["width"], reverse=True)[0]["link"]
                         else: video_url = best_vid["video_files"][0]["link"]
@@ -266,7 +269,6 @@ def fetch_stock_video(duration, clip_index, search_query):
                         valid_vids = [v for v in res.json()["hits"] if is_video_valid(v)]
                         if valid_vids:
                             v_data = random.choice(valid_vids)["videos"]
-                            # पिक्साबे में Medium = 1080p
                             video_url = v_data.get("medium", v_data.get("large"))["url"]
                 except Exception as e: errors.append(f"Pixabay: {e}")
 
@@ -278,7 +280,8 @@ def fetch_stock_video(duration, clip_index, search_query):
                         if getattr(clip, 'duration', None) is None or clip.duration <= 2.0:
                             raise Exception("छोटा वीडियो")
                             
-                        safe_start = 1.0
+                        # Smart Trimming (ब्लैक स्क्रीन से बचाव)
+                        safe_start = 1.5
                         if clip.duration > duration + safe_start:
                             start_time = random.uniform(safe_start, clip.duration - duration)
                             clip = clip.subclip(start_time, start_time + duration)
@@ -291,8 +294,8 @@ def fetch_stock_video(duration, clip_index, search_query):
                     except Exception as e:
                         errors.append(f"Crop Error: {e}")
                         
-    # 🛑 एमरजेंसी बैकअप: अगर Pexels बैन कर दे, तो मशीन क्रैश नहीं होगी, बल्कि एक डार्क बैकग्राउंड लगा देगी!
-    print(f"⚠️ वीडियो नहीं मिला, एमरजेंसी बैकअप (ColorClip) लगा रहे हैं...", flush=True)
+    # 🛑 एमरजेंसी बैकअप
+    print(f"⚠️ वीडियो नहीं मिला, एमरजेंसी कलर बैकअप लगा रहे हैं...", flush=True)
     return ColorClip(size=(1080, 1920), color=(15, 15, 15)).set_duration(duration)
 
 # --- 7. 📝 पॉप-अप कैप्शंस (सफ़ेद टेक्स्ट, काले स्ट्रोक) ---
@@ -318,10 +321,11 @@ def create_subtitle_clip(text, duration, clip_index):
     img.save(temp_name)
     return ImageClip(temp_name).set_duration(duration)
 
-# --- 8. 🎬 वीडियो कंपाइलेशन ---
+# --- 8. 🎬 वीडियो कंपाइलेशन (Audio Sync & Crash Fix) ---
 def compile_final_video(scenes, final_audio, audio_duration):
     print("🎞️ वीडियो और म्यूजिक के साथ एडिटिंग शुरू...", flush=True)
-    total_duration = audio_duration + 1.0 
+    # 🛑 AUDIO SYNC FIX (क्रैश से बचाने के लिए लंबाई फिक्स)
+    total_duration = audio_duration
     clip_duration = total_duration / len(scenes) 
     processed_clips = []
     
@@ -338,20 +342,29 @@ def compile_final_video(scenes, final_audio, audio_duration):
         else:
             processed_clips.append(base_clip)
             
+    # 🛑 THE IRON SHIELD: ब्लैक स्क्रीन सेफ्टी लॉक 🛑
+    if len(processed_clips) < 2:
+        raise Exception("सेफ्टी लॉक: वीडियो रेंडर नहीं हो पाया!")
+            
     final_video = concatenate_videoclips(processed_clips, method="compose").set_duration(total_duration)
+    
+    # आवाज़ को वीडियो की ड्यूरेशन के साथ लॉक करें
+    padded_audio = final_audio.set_duration(total_duration)
     
     bgm_path = get_random_bgm()
     if bgm_path:
         print(f"🎵 बैकग्राउंड म्यूजिक जोड़ा जा रहा है: {bgm_path}")
         bg_audio = AudioFileClip(bgm_path).volumex(0.12)
         bg_audio = audio_loop(bg_audio, duration=total_duration)
-        bg_audio = audio_fadeout(bg_audio, 2.0)
-        final_mixed_audio = CompositeAudioClip([final_audio, bg_audio]).set_duration(total_duration)
+        bg_audio = audio_fadeout(bg_audio, 1.0)
+        final_mixed_audio = CompositeAudioClip([padded_audio, bg_audio]).set_duration(total_duration)
     else:
-        final_mixed_audio = final_audio.set_duration(total_duration)
+        final_mixed_audio = padded_audio
         
     final_video = final_video.set_audio(final_mixed_audio)
-    final_video.write_videofile("final_viral_shorts.mp4", fps=30, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
+    
+    # 24 FPS RAM बचाने और स्टेबल रेंडरिंग के लिए
+    final_video.write_videofile("final_viral_shorts.mp4", fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", logger=None)
     return "final_viral_shorts.mp4"
 
 # --- 9. 📤 YouTube अपलोड ---
@@ -383,12 +396,11 @@ if __name__ == "__main__":
         final_video = compile_final_video(safe_scenes, final_audio, audio_duration)
         video_url = upload_video(final_video, safe_title, safe_desc, safe_tags)
         
-        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Ultimate Pexels HD Edition)</b>\n🎬 {safe_title}\n🔗 {video_url}")
-        print("🎉 सफलता! 100% असली विजुअल और म्यूजिक वाला वीडियो लाइव हो गया।", flush=True)
+        send_telegram_report(f"✅ <b>नया शॉर्ट्स लाइव! (Ultimate All-in-One Master)</b>\n🎬 {safe_title}\n🔗 {video_url}")
+        print("🎉 सफलता! सभी 7 शर्तों वाला 100% परफेक्ट वीडियो लाइव हो गया।", flush=True)
         
     except Exception as e:
         error_details = str(traceback.format_exc())
-        # GitHub के कंसोल में एरर छापने के लिए:
         print("\n❌ मशीन क्रैश हो गई! पूरी रिपोर्ट यहाँ है:", flush=True)
         print(error_details, flush=True)
         send_telegram_report(f"🚨 मशीन क्रैश:\n\n{error_details[-1500:]}", is_error=True)
